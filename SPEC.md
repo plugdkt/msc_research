@@ -3,7 +3,6 @@
 ## 1. Overview
 - ชื่อโปรเจกต์: ระบบคลังผลงานวิจัย (MSC Research Repository)
 - สรุปสั้นๆ: ระบบเก็บและแสดงผลข้อมูลผลงานตีพิมพ์วิจัยของบุคลากรคณะวิทยาศาสตร์การแพทย์ มหาวิทยาลัยพะเยา โดยดึงข้อมูลมาจากฐานข้อมูล Scopus มาซิงค์เก็บไว้ในระบบ เพื่อให้บุคลากร ผู้บริหาร และบุคคลทั่วไปสามารถค้นหา วิเคราะห์ และดูสถิติผลงานวิจัยของคณะ/รายบุคคล/รายภาควิชาได้
-- อ้างอิงระบบที่ใช้งานจริง: https://www.medsci.up.ac.th/msc_research/
 
 ## 2. Goals
 - เป้าหมายหลักที่ต้องทำให้ได้:
@@ -79,8 +78,24 @@
   - จำกัดสิทธิ์การสั่งซิงค์ข้อมูลให้เฉพาะผู้ที่ล็อกอินผ่าน SSO เท่านั้น
 
 ## 10. Deployment
-- ขั้นตอน deploy: (ต้องระบุเพิ่ม - ปัจจุบัน deploy อยู่บน server ของคณะแล้วที่ www.medsci.up.ac.th)
-- Environment variables ที่ต้องตั้งค่า: Scopus API key/credentials, ค่าเชื่อมต่อฐานข้อมูล MySQL, ค่าคอนฟิก SSO
+- Hosting ปัจจุบัน: IIS บน server ของมหาวิทยาลัย (www.medsci.up.ac.th) — มีสิทธิ์ล็อกอินจัดการ server ได้โดยตรง (admin access)
+- เป้าหมาย: เชื่อมต่อ deploy อัตโนมัติผ่าน GitHub เมื่อ push โค้ดเข้า repo
+
+### 10.1 แนวทาง CI/CD ที่แนะนำ: Self-hosted GitHub Actions Runner
+เนื่องจากเป็น IIS บน server ภายในที่ GitHub (cloud) เข้าถึงโดยตรงไม่ได้ และเรามีสิทธิ์แอดมินบนเครื่อง วิธีที่ตรงไปตรงมาที่สุดคือติดตั้ง runner ไว้บนเครื่องนั้นเอง (runner เป็นฝ่ายเชื่อมต่อออกไปหา GitHub เอง ไม่ต้องเปิด inbound port ใดๆ)
+
+**สิ่งที่ต้องติดตั้งเพิ่มบน server:**
+- Git for Windows (สำหรับ clone/pull โค้ด)
+- GitHub Actions self-hosted runner (ลงทะเบียนกับ repo `plugdkt/msc_research` แล้วรันเป็น Windows Service)
+- ตรวจสอบ PHP version + extensions ที่แอปต้องใช้ให้ครบ (ปัจจุบันเว็บรันอยู่แล้วน่าจะครบ แต่ควร list ให้ชัดเมื่อเขียนโค้ดจริง)
+- ให้สิทธิ์ (permission) แก่ runner service ในการเขียนไฟล์ลง physical path ของเว็บไซต์บน IIS
+
+**สิ่งที่ต้องเตรียมฝั่ง GitHub repo:**
+- ไฟล์ `.github/workflows/deploy.yml` — trigger เมื่อ push เข้า branch `main`, รันบน self-hosted runner, ทำหน้าที่ sync ไฟล์ไปยัง physical path ของเว็บไซต์ แล้ว recycle IIS App Pool
+- **GitHub Secrets** เก็บค่าที่อ่อนไหว (Scopus API key, DB credentials, SSO config) — ห้าม commit ค่าจริงลง repo ต้องแยกไฟล์ config ออกจากโค้ด (ใส่ใน `.gitignore`) แล้วให้ workflow generate/เขียนไฟล์ config นั้นตอน deploy โดยดึงค่าจาก Secrets
+- กำหนด branch strategy (เช่น push เข้า `main` = deploy production เลย หรือมี `staging` branch แยกก่อน)
+
+- Environment variables ที่ต้องตั้งค่า: Scopus API key/credentials, ค่าเชื่อมต่อฐานข้อมูล MySQL, ค่าคอนฟิก SSO (เก็บเป็น GitHub Secrets ฝั่ง CI/CD และไฟล์ config ที่ไม่ commit บนเครื่อง server)
 
 ## 11. Timeline / Milestones
 | วันที่ | สิ่งที่ต้องเสร็จ |
@@ -96,3 +111,5 @@
 - Scopus ให้ค่า SDG weight/relevance score มาโดยตรงในฟิลด์ไหน (เช่น Scopus's own SDG mapping ผ่าน Elsevier Fingerprint Engine) หรือต้องคำนวณเองจาก keyword/abstract
 - ถ้าผลงานมี SDG ที่น้ำหนักเท่ากันในอันดับ 2-3 จะตัดสินใจเลือกตัวไหนด้วยเกณฑ์อะไร (tie-breaking rule)
 - ต้องรองรับการ mapping ซ้ำ (re-run) เมื่อ Scopus อัปเดตข้อมูล SDG ภายหลังหรือไม่
+- ทาง IT มหาวิทยาลัยอนุญาตให้ติดตั้ง background service (self-hosted runner) รันค้างไว้บนเครื่อง server ได้หรือไม่ (บางหน่วยงานมีนโยบายจำกัด)
+- ปัจจุบันไฟล์ config ที่เก็บ DB credentials/Scopus API key บนเว็บที่รันอยู่ตอนนี้ อยู่ในรูปแบบไหน (เช่น config.php แยกไฟล์ หรือฝังในโค้ด) เพื่อวางแผนแยกออกจาก git repo ให้ถูกต้อง
