@@ -98,17 +98,24 @@
 | GET/POST | /admin/index.php | หน้าล็อกอิน SSO + สั่งซิงค์ข้อมูล (สั่งซิงค์ซ้อนกันจะถูกปฏิเสธด้วย HTTP 409) | ต้อง (SSO) |
 
 ## 9. Authentication & Security
-- วิธียืนยันตัวตน: Single Sign-On (SSO) สำหรับส่วน Admin เท่านั้น (protocol ที่ใช้จริงยังต้องยืนยัน — ดู Open Questions)
-- **การจัดการ token/session**: ไม่ว่าจะใช้ SSO protocol แบบไหน ระบบต้อง:
-  - Validate signature ของ SSO assertion/token ทุกครั้ง (ห้าม trust ข้อมูลที่ decode ได้โดยไม่ตรวจลายเซ็น)
-  - ตรวจสอบ audience/issuer ให้ตรงกับระบบนี้เท่านั้น (ป้องกัน token จากระบบอื่นถูกนำมาใช้ซ้ำ)
-  - ใช้ session ที่มีอายุสั้น (เช่น หมดอายุใน 1-2 ชั่วโมง) และต้อง re-authenticate ใหม่หลังหมดอายุ
+- **วิธียืนยันตัวตน (ยืนยันแล้ว)**: ใช้ระบบกลางของคณะ **MEDSCI ACC** (Identity Provider ภายใน ไม่ใช่ SAML/OAuth/CAS มาตรฐาน) ผ่านแนวทาง **SSO Redirect (Method 1)** เท่านั้น:
+  1. หน้า Admin ของเรา redirect ผู้ใช้ไปที่ `msc_acc/sso/login.php` พร้อม `client_id` + `redirect_uri`
+  2. ผู้ใช้ล็อกอินที่ระบบกลาง แล้วถูก redirect กลับมาที่ `redirect_uri` ของเราพร้อม `?token=...`
+  3. ระบบเรายิง POST ไปที่ `msc_acc/api/verify.php` พร้อม `token` + `client_id` + `client_secret` เพื่อ verify token และรับข้อมูลโปรไฟล์ (user_id, username, name, ตำแหน่ง, สังกัด, email) กลับมา
+  - **ห้ามใช้ Method 2 (Direct API Auth ที่ส่ง username/password ตรง)** เด็ดขาด แม้คู่มือจะรองรับ เพราะทำให้ระบบเราต้องสัมผัสรหัสผ่านจริงของผู้ใช้โดยไม่จำเป็น เพิ่มความเสี่ยงเรื่อง logging/leak โดยไม่ตั้งใจ
+- **การจัดการ token/session**:
+  - การ verify token ต้องทำฝั่ง **server-side เท่านั้น** ผ่าน HTTPS ไปที่ `msc_acc/api/verify.php` — ห้าม trust ค่าที่ decode จาก token เองฝั่ง client โดยไม่ผ่านการ verify กับระบบกลางก่อน
+  - **ต้องเปิด SSL/TLS certificate verification ตามปกติเมื่อเรียก API ระบบกลาง** (`CURLOPT_SSL_VERIFYPEER` ต้องเป็น `true` หรือไม่ตั้งค่าเป็น false เด็ดขาด) — โค้ดตัวอย่างในคู่มือ SSO ที่ได้รับมามีการปิดค่านี้ไว้ (`CURLOPT_SSL_VERIFYPEER, false`) ซึ่งขัดกับข้อกำหนดเรื่อง HTTPS ของคู่มือเดียวกันเอง **ห้าม copy โค้ดตัวอย่างนั้นไปใช้ตรงๆ โดยไม่แก้ไขจุดนี้ก่อน**
+  - `client_secret` ต้องเก็บใน environment variable/config ฝั่ง server เท่านั้น ห้ามฝังในโค้ด JavaScript ฝั่ง client หรือ commit ลง git repo
+  - ใช้ session ที่มีอายุสั้น (เช่น หมดอายุใน 1-2 ชั่วโมง) และต้อง re-authenticate ใหม่หลังหมดอายุ *(อายุ token/การ replay ซ้ำได้กี่ครั้ง ยังไม่ระบุในคู่มือ — ดู Open Questions)*
+  - **Redirect URI ที่ลงทะเบียนกับ MEDSCI ACC ต้องระบุ URL เต็มเจาะจง** ไม่ใช้ wildcard และไม่ปล่อยว่าง เพื่อป้องกัน Open Redirect (ตามคำแนะนำในคู่มือ SSO)
 - **ประเด็นความปลอดภัยที่ต้องระวัง**:
-  - การเก็บ Scopus API key ต้องไม่ hardcode ในโค้ด ควรเก็บใน env/config แยก
+  - การเก็บ Scopus API key และ MEDSCI ACC client_secret ต้องไม่ hardcode ในโค้ด ควรเก็บใน env/config แยก
   - ต้องป้องกัน SQL Injection ในหน้าค้นหา/กรองข้อมูล (query params หลายจุด) — ใช้ prepared statements เท่านั้น
   - จำกัดสิทธิ์การสั่งซิงค์ข้อมูลให้เฉพาะผู้ที่ล็อกอินผ่าน SSO เท่านั้น
   - **Output encoding / XSS**: ข้อมูลที่มาจาก Scopus (ชื่อเรื่อง, ชื่อผู้แต่ง, แหล่งทุนวิจัย) ถือเป็นข้อมูลจากภายนอก (untrusted) ต้อง HTML-escape ทุกครั้งก่อนแสดงผลบนหน้าเว็บ ห้าม render แบบ raw HTML
   - **Database least privilege**: DB user ที่แอปใช้เชื่อมต่อ MySQL ต้องมีสิทธิ์แค่ SELECT/INSERT/UPDATE เท่าที่จำเป็น ห้ามมีสิทธิ์ DROP/ALTER บน production แยก account สำหรับงาน migration/schema change ออกต่างหาก
+  - **[สำคัญมาก] ห้าม commit เอกสาร/ไฟล์คู่มือการเชื่อมต่อ SSO ที่ได้รับจากคณะขึ้น git repo (แม้เป็น private repo)** เพราะมี Developer Bypass credential (username/password ทดสอบที่ auto-map ไปยังบัญชีบุคลากรจริง) ฝังอยู่ในเอกสาร — ถ้าหลุดออกไปจะกระทบความปลอดภัยของทุกระบบย่อยที่เชื่อมกับ MEDSCI ACC ไม่ใช่แค่โปรเจกต์นี้ ให้เก็บเอกสารนี้แยกไว้นอก repo (เช่น ในไฟล์ note ส่วนตัว หรือ password manager) เท่านั้น
 
 ## 10. Deployment
 - Hosting ปัจจุบัน: IIS บน server ของมหาวิทยาลัย (www.medsci.up.ac.th) — มีสิทธิ์ล็อกอินจัดการ server ได้โดยตรง (admin access)
@@ -135,14 +142,24 @@
 - Environment variables ที่ต้องตั้งค่า: Scopus API key/credentials, ค่าเชื่อมต่อฐานข้อมูล MySQL, ค่าคอนฟิก SSO (เก็บเป็น GitHub Secrets ฝั่ง CI/CD และไฟล์ config ที่ไม่ commit บนเครื่อง server)
 
 ## 11. Timeline / Milestones
+เป้าหมาย: นำเสนอโปรเจกต์วันที่ **3 กันยายน 2569** (เหลือเวลาทำงาน 16 วันนับจากวันนี้ 18 ส.ค. 2569)
+
 | วันที่ | สิ่งที่ต้องเสร็จ |
 |--------|-----------------|
-|        |                 |
+| 18-19 ส.ค. 2569 | ยืนยัน Open Questions กับอาจารย์/ทีม IT (Scopus API field, SSO protocol, frontend framework, นโยบายรัน self-hosted runner) + ตรวจสอบ schema ฐานข้อมูลจริงของระบบเดิม |
+| 20-23 ส.ค. 2569 | สร้างฐานข้อมูล MySQL ตาม Data Model (หัวข้อ 7) + เขียน Scopus sync job เบื้องต้น พร้อม error handling (หัวข้อ 6.1) |
+| 24-26 ส.ค. 2569 | ทำ SDG mapping logic (ดึง weight, เลือก top-2, tie-break rule) + หน้า Dashboard หลัก |
+| 27-29 ส.ค. 2569 | หน้าค้นหางานวิจัย + ทำเนียบนักวิจัย (พร้อม filter/pagination) + หน้ารายงานสรุป (reports.php) ทุกแท็บ |
+| 30-31 ส.ค. 2569 | หน้า Admin (SSO login + sync trigger + sync lock) + ตั้งค่า CI/CD จริง (self-hosted runner, `.github/workflows/deploy.yml`) |
+| 1 ก.ย. 2569 | ทดสอบระบบทั้งหมด โดยเฉพาะ edge case ที่ review ไว้ (หัวข้อ 6.1, 13) + แก้บั๊กที่พบ |
+| 2 ก.ย. 2569 | เตรียม slide/สคริปต์นำเสนอ + rehearsal เดโมจริงบน production |
+| **3 ก.ย. 2569** | **นำเสนอโปรเจกต์** |
 
 ## 12. Open Questions
 คำถามที่เหลืออยู่นี้เป็นคำถามที่**ต้องถามอาจารย์/ทีม IT มหาวิทยาลัยโดยตรง** เท่านั้น เพราะไม่มีข้อมูลเพียงพอให้กำหนดเป็นค่าเริ่มต้นได้เอง (ต่างจากหัวข้อ 4.1/4.2/9/10 ที่ใส่ค่าเริ่มต้นที่สมเหตุสมผลไว้ให้แล้ว รอการยืนยัน/แก้ไขภายหลัง):
 - ใช้ Scopus API แบบไหน (Scopus Search API / Author Retrieval API) และ field ที่ให้ค่า SDG weight มาคือ field ไหนโดยตรง
-- ระบบ SSO ที่ใช้คือของมหาวิทยาลัยพะเยาโดยตรงหรือไม่ ใช้ protocol อะไร (SAML/OAuth/CAS)
+- ~~ระบบ SSO ที่ใช้คือของมหาวิทยาลัยพะเยาโดยตรงหรือไม่ ใช้ protocol อะไร~~ **ยืนยันแล้ว**: ใช้ระบบ MEDSCI ACC ของคณะเอง ผ่าน SSO Redirect + token verify API (ดูรายละเอียดหัวข้อ 9)
+- Token จาก MEDSCI ACC มีอายุเท่าไหร่ และ `verify.php` เรียกซ้ำด้วย token เดิมได้กี่ครั้ง (ป้องกัน token replay) — คู่มือที่ได้รับมาไม่ได้ระบุไว้
 - Frontend framework ที่ใช้จริงคืออะไร (Bootstrap/Tailwind/plain CSS)
 - มีการ export ข้อมูลเป็น Excel/PDF จากหน้ารายงานหรือไม่
 - ทาง IT มหาวิทยาลัยอนุญาตให้ติดตั้ง background service (self-hosted runner) รันค้างไว้บนเครื่อง server ได้หรือไม่ (บางหน่วยงานมีนโยบายจำกัด)
@@ -162,3 +179,4 @@
 10. Scopus API error: retry 3 ครั้งแบบ exponential backoff แล้วยกเลิกทั้ง batch หากยัง fail
 11. Session SSO อายุ 1-2 ชั่วโมง
 12. Performance target: dashboard ≤2s, reports ≤3s ที่ขนาดข้อมูลปัจจุบัน
+13. **เลือกใช้ MEDSCI ACC แบบ SSO Redirect (Method 1) เท่านั้น ไม่ใช้ Direct API Auth (Method 2)** — เป็นการตัดสินใจเชิงความปลอดภัย ไม่ใช่การเดา (ระบบเราจะได้ไม่ต้องสัมผัสรหัสผ่านจริงของผู้ใช้เลย)
