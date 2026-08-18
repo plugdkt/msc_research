@@ -1,1 +1,0 @@
-{"content":"PHP 8.4 supported through Dec 2028 vs PHP 8.3 security-only through Dec 2027 (as of early 2026); new projects should target 8.4. Both run on IIS via FastCGI without version-specific compatibility differences.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-08-18T08:39:03.146Z","ttl":86400000,"kind":"web"}

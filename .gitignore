@@ -5,3 +5,4 @@ config.php
 *.local.php
 *.docx
 ~$*
+.planning/research/.cache/
