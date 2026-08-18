@@ -99,48 +99,48 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SYNC-01 | TBD | Pending |
-| SYNC-02 | TBD | Pending |
-| SYNC-03 | TBD | Pending |
-| SYNC-04 | TBD | Pending |
-| SYNC-05 | TBD | Pending |
-| DASH-01 | TBD | Pending |
-| DASH-02 | TBD | Pending |
-| DASH-03 | TBD | Pending |
-| DASH-04 | TBD | Pending |
-| DASH-05 | TBD | Pending |
-| DASH-06 | TBD | Pending |
-| SEARCH-01 | TBD | Pending |
-| SEARCH-02 | TBD | Pending |
-| SEARCH-03 | TBD | Pending |
-| RESEARCHER-01 | TBD | Pending |
-| RESEARCHER-02 | TBD | Pending |
-| RESEARCHER-03 | TBD | Pending |
-| RESEARCHER-04 | TBD | Pending |
-| RESEARCHER-05 | TBD | Pending |
-| REPORT-01 | TBD | Pending |
-| REPORT-02 | TBD | Pending |
-| REPORT-03 | TBD | Pending |
-| REPORT-04 | TBD | Pending |
-| REPORT-05 | TBD | Pending |
-| REPORT-06 | TBD | Pending |
-| REPORT-07 | TBD | Pending |
-| SDG-01 | TBD | Pending |
-| SDG-02 | TBD | Pending |
-| SDG-03 | TBD | Pending |
-| SDG-04 | TBD | Pending |
-| SDG-05 | TBD | Pending |
-| ADMIN-01 | TBD | Pending |
-| ADMIN-02 | TBD | Pending |
-| ADMIN-03 | TBD | Pending |
-| ADMIN-04 | TBD | Pending |
-| ADMIN-05 | TBD | Pending |
+| SYNC-01 | Phase 1 | Pending |
+| SYNC-02 | Phase 1 | Pending |
+| SYNC-03 | Phase 1 | Pending |
+| SYNC-04 | Phase 1 | Pending |
+| SYNC-05 | Phase 1 | Pending |
+| DASH-01 | Phase 2 | Pending |
+| DASH-02 | Phase 2 | Pending |
+| DASH-03 | Phase 2 | Pending |
+| DASH-04 | Phase 2 | Pending |
+| DASH-05 | Phase 2 | Pending |
+| DASH-06 | Phase 2 | Pending |
+| SEARCH-01 | Phase 2 | Pending |
+| SEARCH-02 | Phase 2 | Pending |
+| SEARCH-03 | Phase 2 | Pending |
+| RESEARCHER-01 | Phase 3 | Pending |
+| RESEARCHER-02 | Phase 3 | Pending |
+| RESEARCHER-03 | Phase 3 | Pending |
+| RESEARCHER-04 | Phase 3 | Pending |
+| RESEARCHER-05 | Phase 3 | Pending |
+| REPORT-01 | Phase 3 | Pending |
+| REPORT-02 | Phase 3 | Pending |
+| REPORT-03 | Phase 4 | Pending |
+| REPORT-04 | Phase 4 | Pending |
+| REPORT-05 | Phase 4 | Pending |
+| REPORT-06 | Phase 4 | Pending |
+| REPORT-07 | Phase 3 | Pending |
+| SDG-01 | Phase 4 | Pending |
+| SDG-02 | Phase 4 | Pending |
+| SDG-03 | Phase 4 | Pending |
+| SDG-04 | Phase 4 | Pending |
+| SDG-05 | Phase 4 | Pending |
+| ADMIN-01 | Phase 5 | Pending |
+| ADMIN-02 | Phase 5 | Pending |
+| ADMIN-03 | Phase 5 | Pending |
+| ADMIN-04 | Phase 5 | Pending |
+| ADMIN-05 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 36 total
-- Mapped to phases: 0
-- Unmapped: 36 ⚠️ (to be filled by roadmapper)
+- Mapped to phases: 36
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-18*
-*Last updated: 2026-08-18 after initial definition*
+*Last updated: 2026-08-18 after roadmap creation — 36/36 v1 requirements mapped across 5 phases*
