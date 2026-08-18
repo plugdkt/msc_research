@@ -1,0 +1,7 @@
+sso_integration_guide.md
+.env
+.env.*
+config.php
+*.local.php
+*.docx
+~$*
