@@ -2,8 +2,6 @@
 
 ระบบคลังผลงานวิจัยของบุคลากร คณะวิทยาศาสตร์การแพทย์ มหาวิทยาลัยพะเยา — ซิงค์ข้อมูลผลงานตีพิมพ์จาก Scopus มาแสดงเป็นแดชบอร์ด, ค้นหางานวิจัย, ทำเนียบนักวิจัย, รายงานวิเคราะห์ และ mapping ผลงานเข้ากับ SDGs
 
-ระบบเวอร์ชันที่ใช้งานอยู่จริง: https://www.medsci.up.ac.th/msc_research/
-
 ## เอกสารโปรเจกต์
 รายละเอียดทั้งหมด (requirements, data model, security, deployment, timeline, testing checklist) อยู่ใน **[SPEC.md](./SPEC.md)**
 
