@@ -214,6 +214,21 @@ function process_sdg_csv($pdo, $filePath) {
     ];
 }
 
+// Dictionary status panel (SDG-06a visibility): shows admins whether this
+// page is reading the live msc_sdgs dictionary or the bundled fallback, how
+// many keyphrases exist per SDG, and how classified the publication data
+// currently is - so "what's actually going on" is visible instead of a
+// blank import form with no context.
+$dict_info = get_sdg_dictionary_info();
+try {
+    $total_pubs = (int)$pdo->query("SELECT COUNT(*) FROM `publications`")->fetchColumn();
+    $classified_pubs = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE (sdg_primary IS NOT NULL AND sdg_primary != '') OR (sdg_secondary IS NOT NULL AND sdg_secondary != '')")->fetchColumn();
+} catch (PDOException $e) {
+    $total_pubs = 0;
+    $classified_pubs = 0;
+}
+$unclassified_pubs = $total_pubs - $classified_pubs;
+
 // Handle local server seed
 if (isset($_POST['seed_sdgs'])) {
     try {
@@ -249,6 +264,81 @@ if (isset($_POST['upload_csv'])) {
 <div class="hero glass-panel animate-fade-in" style="padding: 30px 20px; margin-bottom: 30px;">
     <h2>จัดการและนำเข้าเป้าหมายการพัฒนาที่ยั่งยืน (SDGs Mapping)</h2>
     <p>อัปเดตเป้าหมายหลักและเป้าหมายรองของ SDGs (Sustainable Development Goals) ให้กับบทความวิจัยที่อยู่ในระบบ</p>
+</div>
+
+<!-- Dictionary Status Panel -->
+<div class="glass-panel animate-fade-in" style="padding: 25px; margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+        <h3 style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-database" style="color: var(--color-primary);"></i>
+            <span>สถานะพจนานุกรมคำสำคัญ SDGs (msc_sdgs Dictionary)</span>
+        </h3>
+        <?php if ($dict_info['source'] === 'live'): ?>
+            <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.3); font-size:0.8rem; padding:4px 12px; border-radius:14px; font-weight:600;">
+                <i class="fa-solid fa-bolt"></i> Live: msc_sdgs
+            </span>
+        <?php elseif ($dict_info['source'] === 'bundled'): ?>
+            <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); font-size:0.8rem; padding:4px 12px; border-radius:14px; font-weight:600;">
+                <i class="fa-solid fa-box-archive"></i> Bundled copy (สำรอง - อาจไม่ล่าสุด)
+            </span>
+        <?php else: ?>
+            <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(239, 68, 68, 0.15); color:#f87171; border:1px solid rgba(239, 68, 68, 0.3); font-size:0.8rem; padding:4px 12px; border-radius:14px; font-weight:600;">
+                <i class="fa-solid fa-circle-exclamation"></i> ไม่พบพจนานุกรม
+            </span>
+        <?php endif; ?>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 25px;">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">จำนวน SDGs ในพจนานุกรม</div>
+            <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo (int)$dict_info['count']; ?> / 17</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">คำสำคัญ (Keyphrases) ทั้งหมด</div>
+            <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format(array_sum(array_map(fn($s) => count($s['keyphrases'] ?? []), $dict_info['data']))); ?></div>
+        </div>
+        <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่จำแนก SDG แล้ว</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; font-family: var(--font-eng);"><?php echo number_format($classified_pubs); ?></div>
+        </div>
+        <div style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); padding: 14px; border-radius: 10px; text-align: center;">
+            <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่ยังไม่จำแนก</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #f87171; font-family: var(--font-eng);"><?php echo number_format($unclassified_pubs); ?></div>
+        </div>
+    </div>
+
+    <?php if (!empty($dict_info['data'])): ?>
+    <details>
+        <summary style="cursor: pointer; font-size: 0.85rem; color: var(--color-text-muted); font-weight: 500; margin-bottom: 10px;">
+            <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem;"></i> ดูรายละเอียดคำสำคัญแยกตาม SDG (17 เป้าหมาย)
+        </summary>
+        <div style="overflow-x: auto; max-height: 320px; overflow-y: auto; margin-top: 10px;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--border-glass); color: var(--color-text-muted); position: sticky; top: 0; background: #0f172a;">
+                        <th style="padding: 8px;">SDG</th>
+                        <th style="padding: 8px;">จำนวนคำสำคัญ</th>
+                        <th style="padding: 8px;">อัปเดตล่าสุด (จากพจนานุกรม)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($dict_info['data'] as $sdg): ?>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 8px;">
+                                <span style="display:inline-flex; align-items:center; gap:8px;">
+                                    <span style="width:12px; height:12px; border-radius:3px; background:<?php echo htmlspecialchars($sdg['color'] ?? '#64748b'); ?>; flex-shrink:0;"></span>
+                                    <strong>SDG <?php echo (int)($sdg['num'] ?? 0); ?></strong> — <?php echo htmlspecialchars($sdg['name_th'] ?? $sdg['name'] ?? ''); ?>
+                                </span>
+                            </td>
+                            <td style="padding: 8px; font-family: var(--font-eng);"><?php echo number_format(count($sdg['keyphrases'] ?? [])); ?></td>
+                            <td style="padding: 8px; color: var(--color-text-muted); font-size: 0.8rem;"><?php echo htmlspecialchars($sdg['updated'] ?? '-'); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </details>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($message)): ?>
