@@ -113,31 +113,50 @@ function process_sdg_csv($pdo, $filePath) {
             $sdg_secondary = trim($sdg_secondary);
             $rationale = trim($rationale);
 
-            // Normalize to a canonical "SDG N" (N = 1-17) or null — SDG-03
-            // requires unclassified publications to be null/blank, never an
-            // arbitrary string. A previous version of this closure fell
-            // through to `return $val` for anything unrecognized, which is
-            // how values like "ไม่ทราบ" ("unknown") ended up stored as if
-            // they were a real SDG label. Anything that isn't a valid
-            // SDG 1-17 now normalizes to null instead of being kept as-is.
-            $normalize_sdg = function($val) {
-                if (empty($val)) return null;
-                $val = trim(str_replace(['(?)', '( ? )', '?'], '', $val));
-                $val = trim(strtoupper($val));
-                if (empty($val)) return null;
-
-                $num = null;
-                if (preg_match('/^SDG\s*(\d+)$/', $val, $matches)) {
-                    $num = (int)$matches[1];
-                } elseif (is_numeric($val)) {
-                    $num = (int)$val;
+            // Extract every valid "SDG N" (N = 1-17) code found in a cell,
+            // in order. Handles both a single value and a list crammed into
+            // one cell (e.g. "SDG 3; SDG 12" - seen in real data: some
+            // publications genuinely match 3+ SDGs, and whoever built the
+            // source CSV had nowhere else to put the extra ones). Anything
+            // that isn't a recognizable SDG code (e.g. the literal Thai
+            // "ไม่ทราบ" = "unknown" found in real data) is dropped rather
+            // than kept as-is - SDG-03 requires unclassified to be null, not
+            // an arbitrary string.
+            $extract_sdg_codes = function ($val) {
+                if (empty($val)) return [];
+                $val = str_replace(['(?)', '( ? )', '?'], '', $val);
+                $codes = [];
+                foreach (preg_split('/[;,]/', $val) as $piece) {
+                    $piece = trim(strtoupper($piece));
+                    if ($piece === '') continue;
+                    $num = null;
+                    if (preg_match('/^SDG\s*(\d+)$/', $piece, $matches)) {
+                        $num = (int)$matches[1];
+                    } elseif (is_numeric($piece)) {
+                        $num = (int)$piece;
+                    }
+                    if ($num !== null && $num >= 1 && $num <= 17) {
+                        $codes[] = "SDG {$num}";
+                    }
                 }
-
-                return ($num !== null && $num >= 1 && $num <= 17) ? "SDG {$num}" : null;
+                return array_values(array_unique($codes));
             };
 
-            $sdg_primary = $normalize_sdg($sdg_primary);
-            $sdg_secondary = $normalize_sdg($sdg_secondary);
+            // The schema only has room for 2 (sdg_primary, sdg_secondary).
+            // Combine whatever codes were found across both source cells,
+            // keep the first 2 distinct ones, and preserve any overflow as a
+            // note in the rationale instead of silently discarding it.
+            $all_codes = array_values(array_unique(array_merge(
+                $extract_sdg_codes($sdg_primary),
+                $extract_sdg_codes($sdg_secondary)
+            )));
+            $overflow_codes = array_slice($all_codes, 2);
+            $sdg_primary = $all_codes[0] ?? null;
+            $sdg_secondary = $all_codes[1] ?? null;
+            if (!empty($overflow_codes)) {
+                $overflow_note = "[พบ SDG เพิ่มเติมจากไฟล์นำเข้าที่เก็บไม่ได้ (เก็บได้สูงสุด 2 ข้อ): " . implode(', ', $overflow_codes) . "]";
+                $rationale = trim($rationale . ' ' . $overflow_note);
+            }
 
             $matched_id = null;
             $match_method = '';
