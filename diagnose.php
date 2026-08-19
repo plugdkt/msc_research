@@ -2,6 +2,15 @@
 // diagnose.php
 // Diagnostic tool to check database status and login credentials
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('HTTP/1.1 403 Forbidden');
+    echo "<h3>Access Denied</h3><p>กรุณาเข้าสู่ระบบในฐานะผู้ดูแลระบบก่อนเข้าใช้งานหน้านี้</p>";
+    exit;
+}
+
 header('Content-Type: text/html; charset=utf-8');
 require_once __DIR__ . '/config/db.php';
 
