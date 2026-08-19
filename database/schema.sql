@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS `researchers` (
     `avatar_url` VARCHAR(255) NULL,
     `researcher_type` VARCHAR(50) DEFAULT 'สายวิชาการ' NOT NULL,
     `h_index_peak` INT NOT NULL DEFAULT 0,
+    -- RESEARCHER-05: inactive/departed researchers are hidden from the public
+    -- directory, but their historical publications still count in faculty-wide
+    -- statistics — so this is a visibility flag, never a delete.
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -87,6 +91,23 @@ CREATE TABLE IF NOT EXISTS `corresponding_publications` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (`researcher_id`) REFERENCES `researchers`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- SYNC-01..05: audit trail for every sync run (manual or cron-triggered).
+-- One row per run; `status` moves running -> success|partial|failed.
+CREATE TABLE IF NOT EXISTS `sync_log` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `completed_at` TIMESTAMP NULL,
+    `status` VARCHAR(20) NOT NULL DEFAULT 'running', -- running | success | partial | failed
+    `triggered_by` VARCHAR(100) NULL, -- admin username, 'cli', or 'cron-token'
+    `researchers_processed` INT NOT NULL DEFAULT 0,
+    `publications_synced` INT NOT NULL DEFAULT 0,
+    `records_skipped` INT NOT NULL DEFAULT 0, -- SYNC-03: incomplete Scopus records (no DOI / no author)
+    `duplicate_scopus_ids_found` INT NOT NULL DEFAULT 0, -- SYNC-04
+    `error_message` TEXT NULL,
+    `details` TEXT NULL, -- JSON: per-researcher log lines, for admin review
+    INDEX (`started_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `journal_quartiles` (

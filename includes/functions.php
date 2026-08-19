@@ -4,6 +4,38 @@
 
 require_once __DIR__ . '/../config/db.php';
 
+// ---------------------------------------------------------------------
+// Typed HTTP exceptions
+//
+// http_get() throws one of these instead of a plain RuntimeException so
+// callers implementing SYNC-01/02's retry contract can tell "connection
+// failed / timed out" (retry with 5s/15s/45s backoff) apart from "got a
+// 429" (wait per Retry-After/X-RateLimit-Reset, or 60s fallback) apart
+// from any other HTTP error (not retryable — e.g. 401/403/500).
+// ---------------------------------------------------------------------
+
+class ApiTimeoutException extends RuntimeException {}
+
+class ApiRateLimitException extends RuntimeException {
+    /** @var int|null seconds to wait before retrying, from Retry-After / X-RateLimit-Reset, or null if absent */
+    public $retryAfterSeconds;
+
+    public function __construct($message, $retryAfterSeconds = null) {
+        parent::__construct($message);
+        $this->retryAfterSeconds = $retryAfterSeconds;
+    }
+}
+
+class ApiHttpException extends RuntimeException {
+    /** @var int */
+    public $httpCode;
+
+    public function __construct($message, $httpCode) {
+        parent::__construct($message);
+        $this->httpCode = $httpCode;
+    }
+}
+
 /**
  * Get country flag image URL from flagcdn.com based on country name mapping
  */
@@ -310,44 +342,64 @@ function get_researcher_publications($pdo, $researcher_id) {
 /**
  * Perform an HTTP GET request and return the raw response body.
  *
- * Throws a RuntimeException on network failure or a non-2xx HTTP status,
- * so callers can distinguish "API is down / rejected us" from
- * "API responded successfully with zero results".
+ * Throws a typed exception on failure so callers can implement the
+ * SYNC-01/02 retry contract:
+ * - ApiTimeoutException: connection/timeout-class curl failure (retry with backoff)
+ * - ApiRateLimitException: HTTP 429 (retry after retryAfterSeconds, or a fallback)
+ * - ApiHttpException: any other non-2xx status (not retryable)
  *
- * @throws RuntimeException
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException
  */
 function http_get($url, array $headers = [], $timeout = 10, $user_agent = null) {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true); // need response headers for Retry-After / X-RateLimit-Reset
     curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min(5, $timeout));
     curl_setopt($ch, CURLOPT_USERAGENT, $user_agent ?: 'MSC-Research-System/1.0 (+https://www.medsci.up.ac.th; mailto:msc_research@up.ac.th)');
     if (!empty($headers)) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     }
-    // SSL verification stays on for every outbound call (Scopus, ORCID, PubMed,
-    // CrossRef, ...). If the Windows/IIS CA bundle is out of date, fix that at
-    // the php.ini level (curl.cainfo pointing at an up-to-date cacert.pem)
-    // rather than disabling verification here — that would silently accept
-    // any TLS certificate, including a MITM's, for every API this app calls.
+    // SSL verification stays on for every outbound call (Scopus, CrossRef, ...).
+    // If the Windows/IIS CA bundle is out of date, fix that at the php.ini level
+    // (curl.cainfo pointing at an up-to-date cacert.pem) rather than disabling
+    // verification here — that would silently accept any TLS certificate,
+    // including a MITM's, for every API this app calls.
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
-    $response = curl_exec($ch);
+    $raw = curl_exec($ch);
     $errno = curl_errno($ch);
     $error = curl_error($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     curl_close($ch);
 
     if ($errno !== 0) {
-        throw new RuntimeException("HTTP request failed ({$url}): curl error [{$errno}] {$error}");
-    }
-    if ($http_code < 200 || $http_code >= 300) {
-        throw new RuntimeException("HTTP request failed ({$url}): HTTP status {$http_code}");
+        // Every curl-level failure (DNS, connect, and actual timeouts alike)
+        // is treated as the retryable "timeout" class per SYNC-01.
+        throw new ApiTimeoutException("HTTP request failed ({$url}): curl error [{$errno}] {$error}");
     }
 
-    return $response;
+    $header_text = $raw !== false ? substr($raw, 0, $header_size) : '';
+    $body = $raw !== false ? substr($raw, $header_size) : '';
+
+    if ($http_code === 429) {
+        $retry_after = null;
+        if (preg_match('/^Retry-After:\s*(\d+)/mi', $header_text, $m)) {
+            $retry_after = (int)$m[1];
+        } elseif (preg_match('/^X-RateLimit-Reset:\s*(\d+)/mi', $header_text, $m)) {
+            $retry_after = max(0, (int)$m[1] - time());
+        }
+        throw new ApiRateLimitException("HTTP request failed ({$url}): rate limited (429)", $retry_after);
+    }
+
+    if ($http_code < 200 || $http_code >= 300) {
+        throw new ApiHttpException("HTTP request failed ({$url}): HTTP status {$http_code}", $http_code);
+    }
+
+    return $body;
 }
 
 /**
@@ -648,142 +700,11 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
 }
 
 /**
- * Match an author-list string (as returned by an external API, e.g.
- * "Somchai P, Prayoon K, Deejai S") against a researcher's English profile
- * names.
- *
- * This is inherently a heuristic — author strings are formatted differently
- * by every provider — but it is meaningfully stricter than a plain substring
- * search: it splits the string into individual author entries and requires
- * the last name to appear as a whole word AND the first-name initial to
- * appear as a standalone token WITHIN THE SAME entry, rather than anywhere
- * in the entire author list. A plain `strpos($whole_string, $initial)` (the
- * previous implementation) matches almost any list because a single letter
- * is common; that check has been removed.
- *
- * For deterministic matching, prefer linking by ORCID iD ([auid] in PubMed,
- * AU-ID in Scopus) wherever the data source supports it — this name-based
- * matcher should be treated as a fallback for sources that don't expose
- * a stable per-author identifier.
- */
-function match_author_to_researcher($author_string, $first_name_en, $last_name_en) {
-    $last_name = trim($last_name_en);
-    $first_initial = strtoupper(substr(trim($first_name_en), 0, 1));
-
-    if ($last_name === '' || $first_initial === '' || empty($author_string)) {
-        return false;
-    }
-
-    // Split the combined author string into individual author entries on
-    // comma/semicolon. Some formats separate the last name and initials
-    // with their own comma (e.g. "Deejai, S"), so re-attach a short
-    // ALL-CAPS-looking token (likely initials) back onto the previous entry.
-    $raw_entries = preg_split('/\s*[,;]\s*/', $author_string);
-    $entries = [];
-    foreach ($raw_entries as $token) {
-        $token = trim($token);
-        if ($token === '') continue;
-        if (preg_match('/^[A-Za-z]{1,3}\.?$/', $token) && !empty($entries)) {
-            $entries[count($entries) - 1] .= ' ' . $token;
-        } else {
-            $entries[] = $token;
-        }
-    }
-
-    $last_name_pattern = preg_quote($last_name, '/');
-    $initial_pattern = preg_quote($first_initial, '/');
-
-    foreach ($entries as $entry) {
-        // Last name must appear as a distinct whole word within this single author entry.
-        if (!preg_match('/\b' . $last_name_pattern . '\b/iu', $entry)) {
-            continue;
-        }
-        // First-name initial must appear as its own token (e.g. "P", "P.", "PK"),
-        // still scoped to this one author entry rather than the whole author list.
-        if (preg_match('/\b' . $initial_pattern . '[A-Za-z]{0,2}\.?\b/u', strtoupper($entry))) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
- * Search and Sync publications by Affiliation/Query from PubMed, then strictly filter
- * and only save publications that belong to registered researchers.
- *
- * NOTE: this function no longer performs an automatic database-wide cleanup
- * of "orphaned" publications. A blanket
- *   DELETE FROM publications WHERE id NOT IN (SELECT publication_id FROM researcher_publications)
- * run as a side effect of every affiliation sync is dangerous: if this sync
- * runs concurrently with another sync that has inserted a publication but
- * not yet linked it to a researcher, that unrelated publication could be
- * deleted out from under it. Cleanup is now a separate, explicit,
- * admin-triggered function — see cleanup_orphaned_publications().
- */
-function sync_affiliation_publications($pdo, $affiliation_query) {
-    if (empty($affiliation_query)) return ['total_found' => 0, 'imported' => 0, 'linked' => 0];
-
-    $pubs = fetch_pubmed_publications($affiliation_query);
-    if (empty($pubs)) return ['total_found' => 0, 'imported' => 0, 'linked' => 0];
-
-    // Fetch all registered researchers to match names
-    $stmt = $pdo->query("SELECT id, first_name_en, last_name_en FROM `researchers`");
-    $researchers = $stmt->fetchAll();
-
-    $imported_count = 0;
-    $linked_count = 0;
-
-    foreach ($pubs as $pub) {
-        $matched_researcher_ids = [];
-
-        // 1. Check if the publication authors match any of our registered researchers
-        foreach ($researchers as $r) {
-            if (match_author_to_researcher($pub['authors'], $r['first_name_en'], $r['last_name_en'])) {
-                $matched_researcher_ids[] = $r['id'];
-            }
-        }
-
-        // 2. STRICT FILTER: Only save the publication if it matches at least one registered researcher
-        if (!empty($matched_researcher_ids)) {
-            $pubId = add_or_update_publication($pdo, $pub, null);
-
-            if ($pubId) {
-                $imported_count++;
-
-                foreach ($matched_researcher_ids as $r_id) {
-                    $stmtLinkCheck = $pdo->prepare("
-                        SELECT 1 FROM `researcher_publications` 
-                        WHERE researcher_id = ? AND publication_id = ?
-                    ");
-                    $stmtLinkCheck->execute([$r_id, $pubId]);
-                    if (!$stmtLinkCheck->fetch()) {
-                        $stmtLink = $pdo->prepare("
-                            INSERT INTO `researcher_publications` (researcher_id, publication_id) 
-                            VALUES (?, ?)
-                        ");
-                        $stmtLink->execute([$r_id, $pubId]);
-                        $linked_count++;
-                    }
-                }
-            }
-        }
-    }
-
-    return [
-        'total_found' => count($pubs),
-        'imported' => $imported_count,
-        'linked' => $linked_count
-    ];
-}
-
-/**
  * Explicit, admin-triggered cleanup of publications with zero researcher links.
  *
  * Deliberately NOT called automatically from any sync function — run this
  * on demand (e.g. from a dedicated admin button) when you're confident no
- * other sync is running concurrently, to avoid the race condition described
- * in sync_affiliation_publications() above.
+ * other sync is running concurrently.
  *
  * Returns the number of rows deleted.
  */
@@ -801,168 +722,26 @@ function cleanup_orphaned_publications($pdo) {
 }
 
 /**
- * Fetch publications from PubMed using NCBI E-utilities API
- *
- * @throws RuntimeException on network/API failure (caller is expected to catch this)
- */
-function fetch_pubmed_publications($query) {
-    if (empty($query)) return [];
-
-    $publications = [];
-    $searchUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=" . urlencode($query) . "&retmode=json&retmax=50";
-
-    $data = http_get_json($searchUrl, [], 10);
-    $ids = $data['esearchresult']['idlist'] ?? [];
-
-    if (!empty($ids)) {
-        $idString = implode(',', $ids);
-        $summaryUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={$idString}&retmode=json";
-        $summaryData = http_get_json($summaryUrl, [], 10);
-        $results = $summaryData['result'] ?? [];
-
-        foreach ($ids as $id) {
-            if (isset($results[$id])) {
-                $pub = $results[$id];
-
-                // Extract authors
-                $authorsArr = [];
-                if (isset($pub['authors'])) {
-                    foreach ($pub['authors'] as $author) {
-                        $authorsArr[] = $author['name'] ?? '';
-                    }
-                }
-                $authors = implode(', ', array_filter($authorsArr));
-
-                // Extract DOI
-                $doi = '';
-                if (isset($pub['articleids'])) {
-                    foreach ($pub['articleids'] as $artid) {
-                        if ($artid['idtype'] === 'doi') {
-                            $doi = $artid['value'];
-                            break;
-                        }
-                    }
-                }
-
-                // Parse publish year
-                $pubDate = $pub['pubdate'] ?? '';
-                $year = date('Y');
-                if (preg_match('/\b(19|20)\d{2}\b/', $pubDate, $matches)) {
-                    $year = $matches[0];
-                }
-
-                $issn = !empty($pub['issn']) ? trim($pub['issn']) : (!empty($pub['essn']) ? trim($pub['essn']) : null);
-
-                $publications[] = [
-                    'title' => $pub['title'] ?? 'Untitled',
-                    'authors' => !empty($authors) ? $authors : 'Unknown Authors',
-                    'journal_name' => $pub['source'] ?? 'PubMed Document',
-                    'journal_issn' => $issn,
-                    'countries' => 'Thailand',
-                    'publish_year' => $year,
-                    'publish_date' => date('Y-m-d', strtotime($pubDate)),
-                    'doi' => $doi,
-                    'citation_count' => 0, // PubMed API doesn't return citation counts directly in summary
-                    'source' => 'pubmed',
-                    'source_id' => $id,
-                    'url' => "https://pubmed.ncbi.nlm.nih.gov/{$id}/",
-                    'abstract' => ''
-                ];
-            }
-        }
-    }
-
-    return $publications;
-}
-
-/**
- * Fetch publications from ORCID Public API
- *
- * @throws RuntimeException on network/API failure (caller is expected to catch this)
- */
-function fetch_orcid_publications($orcid_id) {
-    if (empty($orcid_id)) return [];
-
-    // Clean any hidden characters, non-breaking spaces, or whitespace
-    $orcid_id = preg_replace('/[^0-9\-X]/i', '', trim($orcid_id));
-    if (!preg_match('/^\d{4}-\d{4}-\d{4}-[\dX]{4}$/', $orcid_id)) {
-        throw new InvalidArgumentException("Invalid ORCID iD format: {$orcid_id}");
-    }
-
-    $url = "https://pub.orcid.org/v3.0/{$orcid_id}/works";
-    $data = http_get_json($url, [], 10);
-    $works = $data['group'] ?? [];
-
-    $publications = [];
-    foreach ($works as $group) {
-        $workSummary = $group['work-summary'][0] ?? null;
-        if ($workSummary) {
-            $title = $workSummary['title']['title']['value'] ?? 'Untitled';
-
-            $doi = null;
-            if (isset($workSummary['external-ids']['external-id'])) {
-                foreach ($workSummary['external-ids']['external-id'] as $extId) {
-                    if ($extId['external-id-type'] === 'doi') {
-                        $doi = $extId['external-id-value'] ?? null;
-                        break;
-                    }
-                }
-            }
-
-            $year = $workSummary['publication-date']['year']['value'] ?? date('Y');
-            $month = $workSummary['publication-date']['month']['value'] ?? '01';
-            $day = $workSummary['publication-date']['day']['value'] ?? '01';
-            $pubDate = "{$year}-{$month}-{$day}";
-
-            $journalName = $workSummary['journal-title']['value'] ?? 'ORCID Registry';
-
-            $url_field = null;
-            if (isset($workSummary['url']['value'])) {
-                $url_field = trim($workSummary['url']['value']);
-            }
-
-            if (empty($url_field)) {
-                if (!empty($doi)) {
-                    $url_field = "https://doi.org/" . trim($doi);
-                } else {
-                    $url_field = "https://orcid.org/{$orcid_id}";
-                }
-            }
-
-            // ORCID works do not list full author arrays in the summary view.
-            $publications[] = [
-                'title' => $title,
-                'authors' => 'ORCID Contributor',
-                'journal_name' => $journalName,
-                'publish_year' => $year,
-                'publish_date' => $pubDate,
-                'doi' => $doi,
-                'citation_count' => 0,
-                'source' => 'orcid',
-                'source_id' => $workSummary['put-code'] ?? null,
-                'url' => $url_field,
-                'abstract' => ''
-            ];
-        }
-    }
-
-    return $publications;
-}
-
-/**
  * Fetch publications from Scopus (requires an Elsevier API Key).
  *
- * IMPORTANT: this function no longer returns simulated/mock data when a key
- * is missing or the request fails. Returning fake publication records that
- * get saved and attributed to a real researcher is a data-integrity and
- * reputational risk (a real person's public profile would show research
- * that doesn't exist). Missing key or failed request now throws, so the
- * caller (sync.php) logs a clear failure instead of silently inserting
- * fabricated data.
+ * Scopus-only data source (2026-08-19 decision — ORCID/PubMed/Google Scholar
+ * removed; multi-source matching/dedup was a recurring source of bugs in the
+ * previous version, and Google Scholar scraping violated its ToS anyway).
  *
- * @throws RuntimeException if no API key is configured or the request fails
+ * This function no longer returns simulated/mock data when a key is missing
+ * or the request fails. Returning fake publication records that get saved
+ * and attributed to a real researcher is a data-integrity and reputational
+ * risk. Missing key or failed request now throws typed exceptions (see
+ * http_get()) so the caller can implement the SYNC-01/02 retry contract.
+ *
+ * SYNC-03: records missing a DOI or author are skipped rather than saved
+ * with placeholder text — pass $skipped_count by reference to get a count.
+ *
+ * @param int|null $skipped_count incremented once per skipped incomplete record
+ * @throws RuntimeException if no API key is configured
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException on request failure
  */
-function fetch_scopus_publications($scopus_author_id, $api_key = null) {
+function fetch_scopus_publications($scopus_author_id, $api_key = null, &$skipped_count = null) {
     if (empty($scopus_author_id)) return [];
 
     if (empty($api_key)) {
@@ -986,18 +765,26 @@ function fetch_scopus_publications($scopus_author_id, $api_key = null) {
                 continue;
             }
 
+            $doi = !empty($entry['prism:doi']) ? trim($entry['prism:doi']) : null;
+            $authors_raw = !empty($entry['dc:creator']) ? trim($entry['dc:creator']) : null;
+
+            // SYNC-03: skip incomplete records (no DOI, no author) instead of
+            // saving them with placeholder text.
+            if ($doi === null || $authors_raw === null) {
+                if ($skipped_count !== null) {
+                    $skipped_count++;
+                }
+                continue;
+            }
+
             $coverDate = $entry['prism:coverDate'] ?? '';
             $year = !empty($coverDate) ? date('Y', strtotime($coverDate)) : date('Y');
 
-            $doi = !empty($entry['prism:doi']) ? trim($entry['prism:doi']) : null;
-            $scopus_link = null;
-
-            if (!empty($doi)) {
-                $scopus_link = "https://doi.org/" . $doi;
-            } elseif (isset($entry['link']) && is_array($entry['link'])) {
+            $scopus_link = "https://doi.org/" . $doi;
+            if (isset($entry['link']) && is_array($entry['link'])) {
                 foreach ($entry['link'] as $lnk) {
                     if (isset($lnk['@ref']) && $lnk['@ref'] === 'scopus') {
-                        $scopus_link = $lnk['@href'] ?? null;
+                        $scopus_link = $lnk['@href'] ?? $scopus_link;
                         break;
                     }
                 }
@@ -1027,7 +814,7 @@ function fetch_scopus_publications($scopus_author_id, $api_key = null) {
 
             $publications[] = [
                 'title' => $entry['dc:title'] ?? 'Untitled',
-                'authors' => $entry['dc:creator'] ?? 'Scopus Author',
+                'authors' => $authors_raw,
                 'journal_name' => $entry['prism:publicationName'] ?? 'Scopus Document',
                 'journal_issn' => $issn,
                 'countries' => $countries,
@@ -1051,94 +838,41 @@ function fetch_scopus_publications($scopus_author_id, $api_key = null) {
 }
 
 /**
- * Fetch publications from a Google Scholar public profile.
+ * fetch_scopus_publications() wrapped with the SYNC-01/02 retry contract:
+ * - connection/timeout failures: retry 3x with 5s/15s/45s backoff
+ * - HTTP 429: wait per Retry-After/X-RateLimit-Reset header (or 60s
+ *   fallback), retry, giving up after 3 attempts like the timeout case
+ * - any other HTTP error (401/403/500/...): not retryable, propagates immediately
  *
- * ⚠️ Scraping Google Scholar is against Google's Terms of Service and is
- * inherently fragile (layout changes, CAPTCHA/rate-limit walls appear
- * without warning). This function no longer falls back to fabricated mock
- * data on failure — a blocked or failed scrape now throws, so it shows up
- * as a clear "ล้มเหลว" entry in the sync log rather than silently inserting
- * publications that were never actually verified against the profile.
- *
- * Recommended longer-term fix (as discussed): stop auto-syncing Google
- * Scholar entirely and instead store just the profile URL, showing it as a
- * "View Google Scholar profile" link on the researcher's page.
- *
- * @throws RuntimeException if the request fails or the page appears to be
- *                           a block/CAPTCHA page rather than a real profile
+ * @param int|null $skipped_count incremented once per skipped incomplete record (see fetch_scopus_publications)
+ * @throws RuntimeException if all 3 attempts are exhausted, or on a non-retryable error
  */
-function fetch_scholar_publications($scholar_id) {
-    if (empty($scholar_id)) return [];
+function fetch_scopus_publications_with_retry($scopus_author_id, $api_key, &$skipped_count = null) {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
 
-    $scholar_id = trim($scholar_id);
-    if (preg_match('/user=([^&]+)/', $scholar_id, $matches)) {
-        $scholar_id = $matches[1];
-    } else {
-        $parts = explode('&', $scholar_id);
-        $scholar_id = trim($parts[0]);
-    }
-
-    if (empty($scholar_id)) return [];
-
-    $url = "https://scholar.google.com/citations?user=" . urlencode($scholar_id) . "&hl=th&cstart=0&pagesize=50";
-
-    $html = http_get($url, [], 8, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-    // Detect common block/CAPTCHA indicators rather than silently treating
-    // a blocked request as "zero publications".
-    $lower_html = strtolower($html);
-    if (strpos($lower_html, 'gs_captcha') !== false
-        || strpos($lower_html, 'sorry, we can') !== false
-        || strpos($lower_html, 'unusual traffic') !== false) {
-        throw new RuntimeException('Google Scholar บล็อกการเข้าถึงอัตโนมัติ (ตรวจพบหน้า CAPTCHA/ป้องกันการเข้าถึงอัตโนมัติ)');
-    }
-
-    if (strpos($html, 'gsc_a_tr') === false) {
-        // Page loaded but doesn't look like a citations profile page at all
-        // (e.g. wrong user ID, profile is private, or Google changed markup).
-        throw new RuntimeException('ไม่พบข้อมูลผลงานในหน้าโปรไฟล์ Google Scholar (ตรวจสอบว่า Scholar ID ถูกต้องและโปรไฟล์เป็นสาธารณะ)');
-    }
-
-    $dom = new DOMDocument();
-    libxml_use_internal_errors(true);
-    $dom->loadHTML('<?xml encoding="UTF-8">' . $html);
-    libxml_clear_errors();
-    $xpath = new DOMXPath($dom);
-
-    $publications = [];
-    $rows = $xpath->query("//tr[@class='gsc_a_tr']");
-    foreach ($rows as $row) {
-        $titleNode = $xpath->query(".//a[@class='gsc_a_at']", $row)->item(0);
-        $metaNodes = $xpath->query(".//div[@class='gs_gray']", $row);
-        $citeNode = $xpath->query(".//a[@class='gsc_a_ac gs_ibl']", $row)->item(0);
-        $yearNode = $xpath->query(".//span[@class='gsc_a_h gsc_a_hc gs_ibl']", $row)->item(0);
-
-        if ($titleNode) {
-            $title = trim($titleNode->textContent);
-            $authors = $metaNodes->item(0) ? trim($metaNodes->item(0)->textContent) : 'Google Scholar Contributor';
-            $journal = $metaNodes->item(1) ? trim($metaNodes->item(1)->textContent) : 'Google Scholar';
-            $citations = $citeNode ? (int)trim($citeNode->textContent) : 0;
-            $year = $yearNode ? (int)trim($yearNode->textContent) : date('Y');
-
-            $publications[] = [
-                'title' => $title,
-                'authors' => $authors,
-                'journal_name' => $journal,
-                'publish_year' => $year,
-                'publish_date' => null,
-                'doi' => null,
-                'citation_count' => $citations,
-                'source' => 'google_scholar',
-                'source_id' => null,
-                'url' => "https://scholar.google.com" . $titleNode->getAttribute('href'),
-                'abstract' => ''
-            ];
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_scopus_publications($scopus_author_id, $api_key, $skipped_count);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[scopus][sync] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[scopus][sync] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
         }
+        // ApiHttpException (any other non-2xx) and any other Throwable are not
+        // caught here — they propagate immediately, since retrying a 401/403/500
+        // won't help.
     }
 
-    // A genuinely empty-but-real profile (0 publications) is possible but rare;
-    // we no longer substitute fabricated data here regardless of outcome.
-    return $publications;
+    throw new RuntimeException(
+        "Scopus sync failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
 }
 
 /**

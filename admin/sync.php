@@ -28,7 +28,7 @@ $is_cron_token = defined('CRON_SYNC_TOKEN')
 
 if ($is_cli || $is_cron_token) {
     // Run automated synchronization
-    run_synchronization($pdo, true);
+    run_synchronization($pdo, true, null, $is_cli ? 'cli' : 'cron-token');
     exit;
 }
 
@@ -41,7 +41,11 @@ $page_title = 'ซิงค์ข้อมูลผ่าน API - Admin Panel';
 
 require_once __DIR__ . '/admin_header.php';
 
+// ADMIN-04: every sync trigger records who triggered it in sync_log.triggered_by.
+$current_admin = $_SESSION['admin_username'] ?? 'unknown-admin';
+
 $sync_logs = [];
+$sync_summary = null;
 $sync_triggered = false;
 $sync_type = 'individual';
 
@@ -57,20 +61,26 @@ try {
 if (isset($_GET['id'])) {
     $sync_triggered = true;
     $sync_type = 'individual';
-    $sync_logs = run_synchronization($pdo, false, (int)$_GET['id']);
+    $sync_result = run_synchronization($pdo, false, (int)$_GET['id'], $current_admin);
+    $sync_logs = $sync_result['logs'];
+    $sync_summary = $sync_result['summary'];
 }
 
 if (isset($_POST['trigger_sync'])) {
     $sync_triggered = true;
     $sync_type = 'all';
-    $sync_logs = run_synchronization($pdo, false);
+    $sync_result = run_synchronization($pdo, false, null, $current_admin);
+    $sync_logs = $sync_result['logs'];
+    $sync_summary = $sync_result['summary'];
 }
 
 if (isset($_POST['trigger_individual_sync'])) {
     $sync_triggered = true;
     $sync_type = 'individual';
     $target_id = (int)$_POST['target_researcher_id'];
-    $sync_logs = run_synchronization($pdo, false, $target_id);
+    $sync_result = run_synchronization($pdo, false, $target_id, $current_admin);
+    $sync_logs = $sync_result['logs'];
+    $sync_summary = $sync_result['summary'];
 }
 
 // --- Orphan cleanup (admin-triggered only, see cleanup_orphaned_publications() in functions.php) ---
@@ -97,21 +107,30 @@ if (isset($_POST['trigger_cleanup']) && isset($_POST['cleanup_confirm']) && $_PO
 
 
 /**
- * Runs the API synchronization process for researchers.
+ * Runs the Scopus synchronization process for researchers (Scopus-only —
+ * ORCID/PubMed/Google Scholar were dropped 2026-08-19; multi-source
+ * matching/dedup was a recurring source of bugs, and scraping Google
+ * Scholar violated its ToS anyway).
  *
- * Each data source (ORCID / PubMed / Scopus / Google Scholar) is wrapped in
- * its own try/catch so that one source failing (expired API key, network
- * timeout, rate limit, etc.) never blocks the remaining sources for the
- * same researcher, and never aborts the whole batch.
+ * Implements the SYNC-01..05 contract:
+ * - SYNC-01/02: fetch_scopus_publications_with_retry() handles timeout
+ *   backoff (5s/15s/45s) and 429 rate-limit waits.
+ * - SYNC-03: incomplete records (no DOI/author) are skipped and counted.
+ * - SYNC-04: researchers sharing a duplicate Scopus Author ID are excluded
+ *   from the run and flagged, rather than auto-merged.
+ * - SYNC-05: each publication write is its own short transaction (see
+ *   add_or_update_publication()), so public reads are never blocked by an
+ *   in-progress sync.
  *
- * A short delay is inserted between researchers (and could be extended
- * per-API-call if a specific provider proves rate-limit sensitive) to avoid
- * hammering external APIs when syncing many researchers in one run.
+ * Every run is recorded in `sync_log` (ADMIN-04: including who triggered it).
+ *
+ * @return array{logs: array, summary: array}
  */
-function run_synchronization($pdo, $quiet = false, $target_researcher_id = null) {
-    // Increase execution time as API calls take time.
-    // For large researcher counts, consider moving this to a real background
-    // queue/worker instead of a single long-running HTTP/CLI request.
+function run_synchronization($pdo, $quiet = false, $target_researcher_id = null, $triggered_by = null) {
+    // Increase execution time as API calls take time (retries can each wait
+    // up to 45s, and a 429 can wait up to 60s). For large researcher counts,
+    // consider moving this to a real background queue/worker instead of a
+    // single long-running HTTP/CLI request.
     set_time_limit(0);
     if (!$quiet) {
         // Web-triggered runs still shouldn't hang the browser forever;
@@ -120,11 +139,42 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null)
     }
 
     $logs = [];
+    $researchers_processed = 0;
+    $publications_synced = 0;
+    $records_skipped = 0;
+    $error_count = 0;
 
-    // Delay (seconds) between researchers to stay well under provider rate limits
-    // (e.g. NCBI recommends max ~3 req/sec without an API key across ORCID+PubMed calls).
+    // Delay (seconds) between researchers to stay well under Scopus rate limits.
     // Note: PHP does not allow `const` inside a function body, so a plain variable is used.
     $inter_researcher_delay_seconds = 1;
+
+    $sync_log_id = null;
+    try {
+        $stmt = $pdo->prepare("INSERT INTO `sync_log` (status, triggered_by) VALUES ('running', ?)");
+        $stmt->execute([$triggered_by]);
+        $sync_log_id = $pdo->lastInsertId();
+    } catch (PDOException $e) {
+        // Don't let a sync_log write failure block the sync itself — just log it.
+        error_log("[sync] failed to open sync_log row: " . $e->getMessage());
+    }
+
+    // SYNC-04: find Scopus Author IDs shared by more than one researcher
+    // *before* touching the API, so those researchers can be excluded from
+    // this run rather than silently synced (which would attribute one
+    // person's publications to both records) or auto-merged.
+    $duplicate_scopus_ids = [];
+    try {
+        $stmt = $pdo->query("
+            SELECT `scopus_author_id`
+            FROM `researchers`
+            WHERE `scopus_author_id` IS NOT NULL AND `scopus_author_id` != ''
+            GROUP BY `scopus_author_id`
+            HAVING COUNT(*) > 1
+        ");
+        $duplicate_scopus_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) {
+        error_log("[sync] failed to check for duplicate Scopus Author IDs: " . $e->getMessage());
+    }
 
     // Fetch researchers (all or targeted)
     try {
@@ -138,12 +188,18 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null)
     } catch (PDOException $e) {
         $msg = "Error fetching researchers: " . $e->getMessage();
         error_log($msg);
+        if ($sync_log_id) {
+            $pdo->prepare("UPDATE `sync_log` SET status = 'failed', completed_at = NOW(), error_message = ? WHERE id = ?")
+                ->execute([$msg, $sync_log_id]);
+        }
+        $logs[] = ["researcher" => "-", "details" => [$msg], "has_error" => true];
         if ($quiet) {
             echo $msg . "\n";
-        } else {
-            $logs[] = ["researcher" => "-", "details" => [$msg], "has_error" => true];
         }
-        return $logs;
+        return ['logs' => $logs, 'summary' => [
+            'researchers_processed' => 0, 'publications_synced' => 0,
+            'records_skipped' => 0, 'duplicate_scopus_ids_found' => count($duplicate_scopus_ids),
+        ]];
     }
 
     $total = count($researchers);
@@ -154,68 +210,44 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null)
         $name = trim($r['title_th'] . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']);
         $logs_entry = ["researcher" => $name, "details" => [], "has_error" => false];
 
-        // 1. Sync ORCID
-        if (!empty($r['orcid_id'])) {
-            try {
-                $pubs = fetch_orcid_publications($r['orcid_id']);
-                $success = 0;
-                foreach ($pubs as $pub) {
-                    if (add_or_update_publication($pdo, $pub, $r['id'])) {
-                        $success++;
-                    }
-                }
-                $logs_entry["details"][] = "ORCID: ดึงสำเร็จ " . count($pubs) . " รายการ (บันทึก/อัปเดตแล้ว {$success} รายการ)";
-            } catch (Throwable $e) {
-                $logs_entry["has_error"] = true;
-                $logs_entry["details"][] = "ORCID: ล้มเหลว - " . $e->getMessage();
-                error_log("[sync][ORCID][researcher {$r['id']}] " . $e->getMessage());
-            }
-        }
-
-
-        // 3. Sync Scopus
-        if (!empty($r['scopus_author_id'])) {
+        if (!empty($r['scopus_author_id']) && in_array($r['scopus_author_id'], $duplicate_scopus_ids, true)) {
+            $logs_entry["has_error"] = true;
+            $error_count++;
+            $logs_entry["details"][] = "ข้าม: Scopus Author ID '{$r['scopus_author_id']}' ซ้ำกับนักวิจัยรายอื่นในระบบ — ปฏิเสธการซิงค์ ต้องตรวจสอบด้วยมือก่อน";
+        } elseif (!empty($r['scopus_author_id'])) {
             try {
                 $scopus_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : null;
                 if (!$scopus_key) {
                     throw new RuntimeException('ไม่พบ SCOPUS_API_KEY ในการตั้งค่าระบบ');
                 }
-                $pubs = fetch_scopus_publications($r['scopus_author_id'], $scopus_key);
+                $skipped_here = 0;
+                $pubs = fetch_scopus_publications_with_retry($r['scopus_author_id'], $scopus_key, $skipped_here);
                 $success = 0;
                 foreach ($pubs as $pub) {
                     if (add_or_update_publication($pdo, $pub, $r['id'])) {
                         $success++;
                     }
                 }
-                $logs_entry["details"][] = "Scopus: ดึงสำเร็จ " . count($pubs) . " รายการ (บันทึก/อัปเดตแล้ว {$success} รายการ)";
+                $publications_synced += $success;
+                $records_skipped += $skipped_here;
+
+                $detail = "Scopus: ดึงสำเร็จ " . count($pubs) . " รายการ (บันทึก/อัปเดตแล้ว {$success} รายการ)";
+                if ($skipped_here > 0) {
+                    $detail .= ", ข้าม {$skipped_here} รายการ (ไม่มี DOI หรือชื่อผู้แต่ง)";
+                }
+                $logs_entry["details"][] = $detail;
             } catch (Throwable $e) {
                 $logs_entry["has_error"] = true;
+                $error_count++;
                 $logs_entry["details"][] = "Scopus: ล้มเหลว - " . $e->getMessage();
                 error_log("[sync][Scopus][researcher {$r['id']}] " . $e->getMessage());
             }
+        } else {
+            $logs_entry["details"][] = "ไม่มี Scopus Author ID สำหรับนักวิจัยรายนี้";
         }
 
-        // 4. Sync Google Scholar
-        if (!empty($r['google_scholar_id'])) {
-            try {
-                $pubs = fetch_scholar_publications($r['google_scholar_id']);
-                $success = 0;
-                foreach ($pubs as $pub) {
-                    if (add_or_update_publication($pdo, $pub, $r['id'])) {
-                        $success++;
-                    }
-                }
-                $logs_entry["details"][] = "Google Scholar: ดึงสำเร็จ " . count($pubs) . " รายการ (บันทึก/อัปเดตแล้ว {$success} รายการ)";
-            } catch (Throwable $e) {
-                $logs_entry["has_error"] = true;
-                $logs_entry["details"][] = "Google Scholar: ล้มเหลว - " . $e->getMessage();
-                error_log("[sync][GoogleScholar][researcher {$r['id']}] " . $e->getMessage());
-            }
-        }
-
-        if (empty($logs_entry["details"])) {
-            $logs_entry["details"][] = "ไม่มีรหัสสำหรับเชื่อมต่อ API";
-        }
+        $researchers_processed++;
+        $logs[] = $logs_entry;
 
         if ($quiet) {
             echo "Researcher: {$name}\n";
@@ -223,19 +255,48 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null)
                 echo " - {$detail}\n";
             }
             echo "\n";
-        } else {
-            $logs[] = $logs_entry;
         }
 
         // Rate limiting: pause briefly between researchers so a large batch
-        // doesn't fire a burst of requests at ORCID/PubMed/Scopus back-to-back.
+        // doesn't fire a burst of requests at Scopus back-to-back.
         // Skipped after the very last researcher.
         if ($index < $total) {
             sleep($inter_researcher_delay_seconds);
         }
     }
 
-    return $logs;
+    if ($sync_log_id) {
+        $status = 'success';
+        if ($error_count > 0) {
+            $status = ($error_count >= $researchers_processed) ? 'failed' : 'partial';
+        }
+        try {
+            $pdo->prepare("
+                UPDATE `sync_log`
+                SET status = ?, completed_at = NOW(), researchers_processed = ?,
+                    publications_synced = ?, records_skipped = ?,
+                    duplicate_scopus_ids_found = ?, details = ?
+                WHERE id = ?
+            ")->execute([
+                $status,
+                $researchers_processed,
+                $publications_synced,
+                $records_skipped,
+                count($duplicate_scopus_ids),
+                json_encode($logs, JSON_UNESCAPED_UNICODE),
+                $sync_log_id,
+            ]);
+        } catch (PDOException $e) {
+            error_log("[sync] failed to close sync_log row {$sync_log_id}: " . $e->getMessage());
+        }
+    }
+
+    return ['logs' => $logs, 'summary' => [
+        'researchers_processed' => $researchers_processed,
+        'publications_synced' => $publications_synced,
+        'records_skipped' => $records_skipped,
+        'duplicate_scopus_ids_found' => count($duplicate_scopus_ids),
+    ]];
 }
 ?>
 
@@ -352,6 +413,16 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null)
                 เลือกการควบคุมซิงค์ทางซ้ายเพื่อเริ่มต้นดึงข้อมูลจาก API
             </div>
         <?php else: ?>
+            <?php if ($sync_summary): ?>
+                <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 12px 15px; margin-bottom: 15px; font-size: 0.85rem; display: flex; gap: 20px; flex-wrap: wrap;">
+                    <span>นักวิจัยที่ประมวลผล: <strong><?php echo (int)$sync_summary['researchers_processed']; ?></strong></span>
+                    <span>ผลงานที่บันทึก/อัปเดต: <strong><?php echo (int)$sync_summary['publications_synced']; ?></strong></span>
+                    <span>ข้าม (ไม่มี DOI/ผู้แต่ง): <strong><?php echo (int)$sync_summary['records_skipped']; ?></strong></span>
+                    <?php if ($sync_summary['duplicate_scopus_ids_found'] > 0): ?>
+                        <span style="color: var(--color-danger, #c55);">Scopus ID ซ้ำ (ปฏิเสธ): <strong><?php echo (int)$sync_summary['duplicate_scopus_ids_found']; ?></strong></span>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <div style="display: flex; flex-direction: column; gap: 15px;">
                 <?php foreach ($sync_logs as $log): ?>
                     <div style="background: rgba(255,255,255,0.02); border: 1px solid <?php echo !empty($log['has_error']) ? 'var(--color-danger, #a33)' : 'var(--border-glass)'; ?>; border-radius: 8px; padding: 15px;">
