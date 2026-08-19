@@ -19,11 +19,15 @@ if (isset($_SESSION['sso_error'])) {
 
 // Build SSO Redirect URL dynamically
 $client_id = defined('SSO_CLIENT_ID') ? SSO_CLIENT_ID : 'msc_research';
-$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
-$host = $_SERVER['HTTP_HOST'];
-$callback_path = dirname($_SERVER['PHP_SELF']);
-$callback_path = str_replace('\\', '/', $callback_path);
-$callback_url = $protocol . "://" . $host . $callback_path . "/sso_callback.php";
+if (defined('SSO_REDIRECT_URI') && !empty(SSO_REDIRECT_URI)) {
+    $callback_url = SSO_REDIRECT_URI;
+} else {
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
+    $host = $_SERVER['HTTP_HOST'];
+    $callback_path = dirname($_SERVER['PHP_SELF']);
+    $callback_path = str_replace('\\', '/', $callback_path);
+    $callback_url = $protocol . "://" . $host . $callback_path . "/sso_callback.php";
+}
 
 $sso_login_base = defined('SSO_LOGIN_URL') ? SSO_LOGIN_URL : 'https://www.medsci.up.ac.th/msc_acc/sso/login.php';
 $sso_url = $sso_login_base . "?client_id=" . urlencode($client_id) . "&redirect_uri=" . urlencode($callback_url);
