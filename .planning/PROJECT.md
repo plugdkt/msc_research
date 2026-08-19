@@ -20,10 +20,11 @@
 - [x] นักวิจัยที่ `is_active = false` ไม่แสดงในทำเนียบ แต่ผลงานเก่ายังนับในสถิติรวม — Phase 3, เพิ่ม UI toggle ใน admin (เดิมมีแค่ column ในฐานข้อมูล ไม่มีทางตั้งค่าได้เลย) (2026-08-19)
 - [x] รายงานสรุปวิเคราะห์ — ส่วน field-dependent (ความร่วมมือระหว่างประเทศ, แหล่งทุน, SDGs, author roles) — Phase 4, ของเดิมถูกต้องอยู่แล้ว 3/4 แท็บ, เพิ่มหมวด "Unclassified" ในแท็บ SDG ที่หายไปทั้งหมด (91.5% ของผลงานไม่มี SDG แต่ก่อนหน้านี้ไม่แสดงที่ไหนเลย) (2026-08-19)
 - [x] SDG mapping ผ่าน CSV import โดย admin (จับคู่ด้วย DOI หรือ title) — ผูกได้สูงสุด 2 SDG ต่อผลงานพร้อม rationale, ไม่มี SDG ที่ match เลย = Unclassified (ดูเหตุผลที่เปลี่ยนจาก auto-mapping แบบ weight ใน Key Decisions) — Phase 4 (2026-08-19)
+- [x] Admin panel ล็อกอินผ่าน MEDSCI ACC SSO (Method 1 เท่านั้น) สั่งซิงค์ข้อมูล พร้อม sync lock/mutex กันซิงค์ซ้อน และ audit log (`triggered_by`) — Phase 5 (**phase สุดท้าย**), เจอ gap จริง 1 จุด: ไม่มี mutex กันซิงค์ซ้อนเลย แก้แล้วพร้อม auto-recovery ถ้า sync ค้าง (2026-08-19)
 
 ### Active
 
-- [ ] Admin panel ล็อกอินผ่าน MEDSCI ACC SSO (Method 1 เท่านั้น) สั่งซิงค์ข้อมูล พร้อม sync lock/mutex กันซิงค์ซ้อน และ audit log (`triggered_by`) — Phase 5
+(ไม่มี — ครบทั้ง 5 phases แล้ว 2026-08-19)
 
 ### Out of Scope
 
@@ -55,15 +56,16 @@
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| ใช้ MEDSCI ACC SSO Redirect (Method 1) เท่านั้น ไม่ใช้ Direct API Auth (Method 2) | ระบบไม่ต้องสัมผัสรหัสผ่านจริงของผู้ใช้ ลดความเสี่ยง logging/leak | — Pending |
-| Admin panel มีหน้าที่แค่สั่งซิงค์ ไม่มีฟีเจอร์แก้ไข/ลบข้อมูลโดยตรง | ข้อมูลผลงานต้องตรงกับ Scopus เสมอ ป้องกันข้อมูลเพี้ยนจากการแก้มือ | — Pending |
+| ใช้ MEDSCI ACC SSO Redirect (Method 1) เท่านั้น ไม่ใช้ Direct API Auth (Method 2) | ระบบไม่ต้องสัมผัสรหัสผ่านจริงของผู้ใช้ ลดความเสี่ยง logging/leak | ✓ Good — verified Phase 5 (2026-08-19); local login ที่มีอยู่คู่ขนานใช้ password แยกของระบบเอง ไม่ใช่รหัสผ่าน MEDSCI ACC จริง จึงไม่ขัดกับ decision นี้ |
+| Admin panel มีหน้าที่แค่สั่งซิงค์ ไม่มีฟีเจอร์แก้ไข/ลบข้อมูลโดยตรง | ข้อมูลผลงานต้องตรงกับ Scopus เสมอ ป้องกันข้อมูลเพี้ยนจากการแก้มือ | ✓ Good — verified Phase 5 (2026-08-19) |
+| Sync mutex = check-then-insert lock ใน `sync_log` (30 นาทีถือว่า stale) แทน DB-level lock (เช่น `GET_LOCK()`) | เครื่องมือ admin ใช้งานจริงไม่ได้มี concurrency สูง (คนกดปุ่ม/cron เป็นครั้งคราว) แนวทางง่ายพอสำหรับ threat model นี้ ตรงกับที่ SPEC.md ต้องการ (reject พร้อมข้อความ ไม่ใช่ hard lock ระดับ DB) | ✓ Good |
 | ~~SDG weight เป็น float 0.0–1.0, เลือก top-2, tie-break ด้วยรหัส SDG น้อยไปมาก~~ **[ยกเลิก 2026-08-19]** | ตรวจสอบแล้วว่า Elsevier ไม่มี weight field แบบนี้จริง (SDG เป็น binary match) และ SciVal API (ที่มีข้อมูล SDG) ไม่อยู่ในสิทธิ์ของ key ที่มี (ทดสอบจริงได้ 403 ENTITLEMENTS_ERROR) | ✗ Invalidated — แทนที่ด้วยรายการถัดไป |
 | SDG mapping v1 = CSV import โดย admin (คงกลไกเดิมของระบบปัจจุบัน), SciVal auto-mapping ผ่าน API ย้ายไป v2 (SDG-06) | ทันเดดไลน์ 3 ก.ย. แน่นอนกว่า เพราะการขอสิทธิ์ SciVal จาก Elsevier/มหาวิทยาลัยใช้เวลาไม่แน่นอน ไม่ควร block งาน v1 | ✓ Good |
 | Re-import CSV เขียนทับ SDG tag เดิมทั้งหมด ไม่เก็บ version ประวัติ | ลดความซับซ้อน เหมาะกับ timeline ที่จำกัด | ✓ Good |
 | แหล่งข้อมูลผลงาน = Scopus อย่างเดียว (ไม่ทำ ORCID/PubMed/Google Scholar แบบระบบเดิมก่อน rewrite) | ระบบเดิมดึงหลายแหล่งแล้วเจอปัญหา matching/dedup ซ้ำๆ ตามที่เจ้าของโปรเจกต์ยืนยัน | ✓ Good |
 | Quartile = คงการ import Excel จาก Scimago ต่อไป ไม่สร้าง live API integration | ยืนยันแล้วว่า Scimago ไม่มี public API ให้เรียกจริง | ✓ Good |
 | `is_active` = toggle ผ่านปุ่มใน admin (ไม่ใช่ hard delete) | ลบนักวิจัยจริงจะ cascade ลบ `researcher_publications` ทำให้ผลงานเก่าหลุดจากสถิติรวมของคณะ ขัดกับ RESEARCHER-05 | ✓ Good |
-| นักวิจัย inactive ซ่อนจากทำเนียบแต่ผลงานเก่ายังนับสถิติรวม | รักษาความถูกต้องของสถิติภาพรวมคณะย้อนหลัง | — Pending |
+| นักวิจัย inactive ซ่อนจากทำเนียบแต่ผลงานเก่ายังนับสถิติรวม | รักษาความถูกต้องของสถิติภาพรวมคณะย้อนหลัง | ✓ Good — verified Phase 3 (2026-08-19) |
 | ผลงานผู้แต่งร่วมหลายภาควิชานับซ้ำได้ทุกภาควิชา, ความร่วมมือหลายประเทศนับเครดิตเต็มทุกประเทศ | ค่าเริ่มต้านที่ให้ภาพรวมความร่วมมือครบถ้วนที่สุด รอยืนยันกับคณะ | — Pending |
 | gitignore `sso_integration_guide.md` ตั้งแต่เริ่มโปรเจกต์ | เอกสารมี Developer Bypass credential ฝังอยู่ หลุดจะกระทบทุกระบบที่เชื่อม MEDSCI ACC | ✓ Good |
 
@@ -85,4 +87,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 — Phase 4 (SDG mapping, field-dependent reports) moved to Validated after fixing the SDG statistics tab's missing Unclassified bucket; 4 of 5 phases complete, only Phase 5 (Admin SSO & Sync Control) remains. Phase 3 (researcher directory, local-aggregate reports) moved to Validated; fixed a critical unauthenticated-mutation vulnerability found in admin/researchers.php; merged parallel server-side security work (web.config, diagnose.php, temp file cleanup) with no conflicts. Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*
+*Last updated: 2026-08-19 — Phase 5 (Admin SSO & Sync Control) moved to Validated after adding the missing sync mutex/lock; **all 5 phases now complete (36/36 v1 requirements)**. Phase 4 (SDG mapping, field-dependent reports) moved to Validated after fixing the SDG statistics tab's missing Unclassified bucket. Phase 3 (researcher directory, local-aggregate reports) moved to Validated; fixed a critical unauthenticated-mutation vulnerability found in admin/researchers.php; merged parallel server-side security work (web.config, diagnose.php, temp file cleanup) with no conflicts. Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*

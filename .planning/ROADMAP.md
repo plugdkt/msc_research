@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Public Dashboard & Search** - Public users can view an at-a-glance dashboard and search publications by title/author/quartile
 - [x] **Phase 3: Researcher Directory & Local-Aggregate Reports** - Users can browse a filterable researcher directory and the six local-aggregate report tabs
 - [x] **Phase 4: SDG Mapping & Extended Reports** - Every publication is auto-tagged with SDGs and the four field-dependent report tabs are available
-- [ ] **Phase 5: Admin SSO & Sync Control** - An authenticated admin can safely trigger syncs via MEDSCI ACC SSO with audit logging
+- [x] **Phase 5: Admin SSO & Sync Control** - An authenticated admin can safely trigger syncs via MEDSCI ACC SSO with audit logging
 
 ## Phase Details
 
@@ -91,6 +91,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Triggering a sync while one is already running is rejected with a clear "sync already running" message — no overlapping syncs
   4. Every sync trigger records the triggering user in `sync_log.triggered_by`
   5. Unauthenticated requests to the sync-trigger endpoint are rejected (401/redirect to login), never executed
+**Status (2026-08-19)**: Complete - the last phase. ADMIN-01/02/04/05 were already correct (verified via the Docker stack, not assumed). ADMIN-03 was a genuine gap: sync_log wrote 'running' rows but nothing ever checked for an existing one before starting a new sync. Fixed with a check-then-insert mutex in run_synchronization() (30-minute staleness window so a crashed sync can't permanently jam the system), verified live by simulating both a real overlap (rejected with the exact SPEC.md message) and a stale lock (correctly recovered). Also restructured the auth-check ordering in admin/sync.php so the HTTP 409 response (required for the rejection case) actually takes effect - PHP can't change the status code after admin_header.php starts printing HTML, which the first version of this fix didn't account for.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -105,7 +106,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Public Dashboard & Search | - | Complete | 2026-08-19 |
 | 3. Researcher Directory & Local-Aggregate Reports | - | Complete | 2026-08-19 |
 | 4. SDG Mapping & Extended Reports | - | Complete | 2026-08-19 |
-| 5. Admin SSO & Sync Control | 0/TBD | Not started | - |
+| 5. Admin SSO & Sync Control | - | Complete | 2026-08-19 |
 
 ## Coverage Notes
 

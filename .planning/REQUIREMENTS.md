@@ -66,11 +66,11 @@ Confirmed against the actual production codebase and a live Elsevier API test �
 
 ### Admin & Sync Control
 
-- [ ] **ADMIN-01**: Admin authenticates via MEDSCI ACC SSO Redirect (Method 1) only — this system never handles a user's raw username/password
-- [ ] **ADMIN-02**: An authenticated admin can trigger a Scopus sync
-- [ ] **ADMIN-03**: Triggering a sync while one is already running is rejected with a clear "sync already running" message — no overlapping syncs
-- [ ] **ADMIN-04**: Every sync trigger records the triggering user in `sync_log.triggered_by`
-- [ ] **ADMIN-05**: Unauthenticated requests to the sync-trigger endpoint are rejected (401/redirect to login), never executed
+- [x] **ADMIN-01**: Admin authenticates via MEDSCI ACC SSO Redirect (Method 1) only — this system never handles a user's raw username/password
+- [x] **ADMIN-02**: An authenticated admin can trigger a Scopus sync
+- [x] **ADMIN-03**: Triggering a sync while one is already running is rejected with a clear "sync already running" message — no overlapping syncs
+- [x] **ADMIN-04**: Every sync trigger records the triggering user in `sync_log.triggered_by`
+- [x] **ADMIN-05**: Unauthenticated requests to the sync-trigger endpoint are rejected (401/redirect to login), never executed
 
 ## v2 Requirements
 
@@ -145,17 +145,18 @@ Which phases cover which requirements. Populated during roadmap creation.
 | SDG-03 | Phase 4 | Done |
 | SDG-04 | Phase 4 | Done |
 | SDG-05 | Phase 4 | Done |
-| ADMIN-01 | Phase 5 | Pending |
-| ADMIN-02 | Phase 5 | Pending |
-| ADMIN-03 | Phase 5 | Pending |
-| ADMIN-04 | Phase 5 | Pending |
-| ADMIN-05 | Phase 5 | Pending |
+| ADMIN-01 | Phase 5 | Done |
+| ADMIN-02 | Phase 5 | Done |
+| ADMIN-03 | Phase 5 | Done |
+| ADMIN-04 | Phase 5 | Done |
+| ADMIN-05 | Phase 5 | Done |
 
 **Coverage:**
 - v1 requirements: 36 total
 - Mapped to phases: 36
 - Unmapped: 0 ✓
+- Done: 36/36 ✓ — all 5 phases complete as of 2026-08-19
 
 ---
 *Requirements defined: 2026-08-18*
-*Last updated: 2026-08-19 — Phase 4 (SDG-01..05, REPORT-03..06) marked Done: fixed the one real gap (SDG statistics tab had no "Unclassified" bucket, so 91.5% of publications were invisible in it rather than shown as their own category); REPORT-03/04/05 verified already correct by reading the logic. 4 of 5 phases now complete (31 of 36 v1 requirements); only Phase 5 (ADMIN-01..05, Admin SSO & Sync Control) remains. Decided to keep the 2-column sdg_primary/sdg_secondary design rather than build a many-to-many table (added as deferred v2 item SDG-07); admin/sdg_import.php now extracts every valid SDG code from a multi-value cell like "SDG 3; SDG 12" instead of discarding it, keeps the first 2, and preserves any overflow in sdg_rationale. Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) marked Done: researchers_list.php rewritten for server-side filter/sort/paginate, is_active wired end-to-end (get_all_researchers, admin UI, dashboard rankings), REPORT-01/02/07 verified correct in pre-existing reports.php. Also fixed a critical unauthenticated-mutation bug found in admin/researchers.php during this phase (verified live, only this one admin page was affected). Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*
+*Last updated: 2026-08-19 — Phase 5 (ADMIN-01..05) marked Done, completing all 5 phases (36/36 v1 requirements). ADMIN-03 was the one real gap: no mutex existed to reject an overlapping sync trigger, despite sync_log tracking a 'running' status. Fixed with a check-then-insert lock (30-minute staleness recovery) in run_synchronization(), plus restructured admin/sync.php's auth-check ordering so the required HTTP 409 response actually takes effect (PHP can't change the status code after HTML output starts, which the routing didn't previously account for). ADMIN-01/02/04/05 were already correct, verified via the Docker stack. Phase 4 (SDG-01..05, REPORT-03..06) marked Done: fixed the one real gap (SDG statistics tab had no "Unclassified" bucket, so 91.5% of publications were invisible in it rather than shown as their own category); REPORT-03/04/05 verified already correct by reading the logic. Decided to keep the 2-column sdg_primary/sdg_secondary design rather than build a many-to-many table (added as deferred v2 item SDG-07); admin/sdg_import.php now extracts every valid SDG code from a multi-value cell like "SDG 3; SDG 12" instead of discarding it, keeps the first 2, and preserves any overflow in sdg_rationale. Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) marked Done: researchers_list.php rewritten for server-side filter/sort/paginate, is_active wired end-to-end (get_all_researchers, admin UI, dashboard rankings), REPORT-01/02/07 verified correct in pre-existing reports.php. Also fixed a critical unauthenticated-mutation bug found in admin/researchers.php during this phase (verified live, only this one admin page was affected). Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*
