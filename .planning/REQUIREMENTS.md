@@ -3,6 +3,14 @@
 **Defined:** 2026-08-18
 **Core Value:** ข้อมูลผลงานตีพิมพ์ของคณะที่ซิงค์มาจาก Scopus ต้องถูกต้อง ครบถ้วน และเข้าถึงได้แบบสาธารณะตลอดเวลา แม้ระหว่างที่กำลังซิงค์ข้อมูลอยู่ก็ตาม
 
+## Resolved Decisions (2026-08-19)
+
+Confirmed against the actual production codebase and a live Elsevier API test — see git history for the full discussion:
+
+- **Data source: Scopus only.** The production system (v1, pre-rewrite) also pulled from ORCID, PubMed, and a Google Scholar scrape — deliberately dropped for this rewrite (multi-source matching/dedup logic was a recurring source of bugs). SYNC-01 below already assumed Scopus-only; no change needed there, just confirming the decision explicitly.
+- **Quartile: Scimago Excel import, not a live API.** SCImago Journal & Country Rank has no public API — confirmed via web search. The production system's existing manual yearly Excel import (`admin/temp_import_xlsx_quartiles.php`) is the only viable mechanism and should be kept for v1 (worth promoting out of `temp_*.php` into a proper admin page later).
+- **SDG mapping: CSV import for v1, not Scopus/SciVal weight-based auto-mapping.** See the SDG Mapping section below for why the original weight-based design doesn't match reality.
+
 ## v1 Requirements
 
 ### Scopus Sync Engine
@@ -48,11 +56,13 @@
 
 ### SDG Mapping
 
-- [ ] **SDG-01**: After each sync, system computes SDG relevance for every publication and tags the top-2 highest-weighted SDGs
-- [ ] **SDG-02**: Ties in SDG weight are broken by ascending SDG code (deterministic, no randomness)
-- [ ] **SDG-03**: Publications with no relevant SDG data are tagged "Unclassified" rather than left blank or errored
+> **Revised 2026-08-19** — the original weight-based design below was invalidated by two confirmed facts: (1) Elsevier's SDG classification is a **binary match against fixed Boolean queries per SDG**, not a continuous relevance score — there is no weight to rank or tie-break on; (2) the project's Scopus API key was tested directly against the SciVal Publication Lookup API (`analytics/scival/publication/{id}`, the endpoint that carries SDG data) and returned `403 ENTITLEMENTS_ERROR` — the key has Scopus Search access but no SciVal entitlement. Given the 2026-09-03 deadline, v1 uses the CSV-import mechanism that already exists and works (`admin/sdg_import.php`); automatic SciVal-based mapping is deferred to v2 (see below) pending a separate entitlement request to the university's Elsevier account.
+
+- [ ] **SDG-01**: Admin can import a CSV file (matched by DOI, falling back to title) that assigns up to 2 SDGs (primary + secondary) plus a free-text rationale to existing publications
+- [ ] **SDG-02**: A publication can carry 0, 1, or 2 SDG tags — there is no "highest-weighted" ordering to compute; primary vs. secondary is whatever the imported CSV specifies
+- [ ] **SDG-03**: Publications with no SDG data imported are tagged "Unclassified" rather than left blank or errored
 - [ ] **SDG-04**: SDG assignment is visible on the publication detail view and in report tabs
-- [ ] **SDG-05**: Re-sync recomputes SDG mapping from scratch and overwrites the prior mapping — no version history kept
+- [ ] **SDG-05**: Re-importing a CSV for a publication overwrites its previous SDG tags (primary/secondary/rationale) with the new values — no version history kept
 
 ### Admin & Sync Control
 
@@ -77,6 +87,10 @@ Deferred to future release. Tracked but not in current roadmap.
 ### Extended Sync
 
 - **SYNC-06**: Scheduled/automatic background sync (cron-triggered), once the manual-trigger flow is proven stable
+
+### SDG Auto-Mapping
+
+- **SDG-06**: Automatic SDG tagging at sync time via the Elsevier SciVal Publication Lookup API (`analytics/scival/publication/{id}`), replacing the v1 manual CSV import — blocked on the university obtaining SciVal API entitlement from Elsevier (confirmed absent from the current key as of 2026-08-19; the key has standard Scopus Search access only)
 
 ## Out of Scope
 
@@ -143,4 +157,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-08-18*
-*Last updated: 2026-08-18 after roadmap creation — 36/36 v1 requirements mapped across 5 phases*
+*Last updated: 2026-08-19 — SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*

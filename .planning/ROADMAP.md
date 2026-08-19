@@ -63,15 +63,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 **UI hint**: yes
 
 ### Phase 4: SDG Mapping & Extended Reports
-**Goal**: Every publication is automatically tagged with SDGs based on the verified Scopus field shape, and the remaining field-dependent report tabs are available
+**Goal**: Every publication can be tagged with SDGs via admin CSV import, and the remaining field-dependent report tabs are available
 **Mode:** mvp
 **Depends on**: Phase 1, Phase 3
 **Requirements**: SDG-01, SDG-02, SDG-03, SDG-04, SDG-05, REPORT-03, REPORT-04, REPORT-05, REPORT-06
+**Note (2026-08-19)**: this phase no longer depends on Phase 1's Scopus-field verification for SDG specifically — SDG data doesn't come from Scopus/SciVal in v1 at all, it's a CSV admin import (see REQUIREMENTS.md). The Phase 1/3 dependency here is really about REPORT-03/04/05/06 needing the funding/country/author-role/SDG data already in the schema, not about SDG field verification.
 **Success Criteria** (what must be TRUE):
-  1. After each sync, every publication is tagged with its top-2 highest-weighted SDGs, with ties broken by ascending SDG code
-  2. Publications with no relevant SDG data are tagged "Unclassified" rather than left blank or errored
+  1. Admin can upload a CSV (matched by DOI, falling back to title) and have it assign up to 2 SDGs (primary + secondary) plus a rationale to the matching publications
+  2. Publications with no SDG data imported are tagged "Unclassified" rather than left blank or errored
   3. SDG assignment is visible on the publication detail view and in report tabs
-  4. Re-sync recomputes SDG mapping from scratch and overwrites the prior mapping, with no version history kept
+  4. Re-importing a CSV for a publication overwrites its previous SDG tags, with no version history kept
   5. Reports include an international collaboration tab (each country on a publication gets full credit, not averaged), a funding sources tab, an author roles tab, and an SDG statistics tab
 **Plans**: TBD
 **UI hint**: yes
@@ -105,6 +106,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 ## Coverage Notes
 
+- **2026-08-19 update**: SDG mapping in Phase 4 is CSV-import-based for v1, not Scopus/SciVal weight-based — the project's Scopus API key was tested directly against the SciVal Publication Lookup API and returned `403 ENTITLEMENTS_ERROR` (Scopus Search access confirmed, no SciVal entitlement). Automatic SciVal-based mapping is tracked as v2 requirement SDG-06 in REQUIREMENTS.md, pending a separate entitlement request. Quartile data source is also confirmed as the existing manual Scimago Excel import (no public Scimago API exists) — Phase 1 doesn't need to "discover" this, just verify the import still works against the real schema.
 - All 36 v1 requirements are mapped to exactly one phase (5/5 phases, 0 orphans).
 - **Watch item carried from research:** DASH-05 (recent publications list) and REPORT-03/04/05 (collaboration, funding, author roles tabs) depend on Scopus fields (funding-sponsor, affiliation-country) that research flagged as unverified/historically sparse. Phase 1's success criterion #1 verifies these fields' presence early. If verification comes back negative (fields absent or unusable), DASH-05's degraded-placeholder behavior already covers it, but REPORT-03/04/05 would need an explicit decision — either accept sparse/partial tabs or move them to v2 in REQUIREMENTS.md — rather than a mid-build fudge during Phase 4 planning.
 - Phase 3's roster-master-data question (department, staff type, Thai name, `is_active` source) is resolved as part of Phase 1 (criterion #5: locally-maintained fields must survive re-sync), so Phase 3 can build the directory against a confirmed data-ownership model rather than rediscovering it.
