@@ -1,31 +1,31 @@
 ---
 gsd_state_version: '1.0'
-status: planning
+status: in_progress
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 2
   total_plans: 0
   completed_plans: 0
-  percent: 0
+  percent: 40
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-18)
+See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** ข้อมูลผลงานตีพิมพ์ของคณะที่ซิงค์มาจาก Scopus ต้องถูกต้อง ครบถ้วน และเข้าถึงได้แบบสาธารณะตลอดเวลา แม้ระหว่างที่กำลังซิงค์ข้อมูลอยู่ก็ตาม
-**Current focus:** Phase 1 — Scopus Sync Engine & Data Foundation
+**Current focus:** Phase 3 — Researcher Directory & Local-Aggregate Reports
 
 ## Current Position
 
-Phase: 1 of 5 (Scopus Sync Engine & Data Foundation)
+Phase: 3 of 5 (Researcher Directory & Local-Aggregate Reports)
 Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-08-18 — Roadmap created, 36/36 v1 requirements mapped across 5 phases
+Status: Phase 1 and Phase 2 complete and verified against real production data (776 publications, 97 researchers, via local Docker stack)
+Last activity: 2026-08-19 — Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) implemented, tested, and pushed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -63,9 +63,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 1 must verify against the real production schema/PHP version and a real Scopus API response before downstream phases are planned in detail — quartile shape, funding-sponsor field, and affiliation-country field presence all gate later phases (see ROADMAP.md Coverage Notes).
-- If Phase 1's field verification finds funding-sponsor/affiliation-country data absent or unusable, REPORT-03/04/05 (Phase 4) need an explicit v1/v2 scope decision in REQUIREMENTS.md before Phase 4 is planned.
+- ~~Phase 1 must verify against the real production schema/PHP version and a real Scopus API response~~ **Resolved 2026-08-19**: verified against real dumps (researchers.sql, msc_research.sql, not committed — see .gitignore) via a local Docker stack (PHP 8.2 + MySQL 8.0). Quartile is a plain `Q1`-`Q4` string, 84.9% populated. Funding-sponsor is 70% populated (previously feared sparse — it isn't). Countries is 100% populated (always includes at least "Thailand"). REPORT-03/04/05 do not need a v1/v2 scope cut after all.
+- SDG data has a real-world quality issue: some existing values are non-standard (e.g. literal "ไม่ทราบ" = "unknown", or multiple codes crammed into one column like "SDG 3; SDG 12"). Normalization fixed for the single-value case (4f52f16); the multi-value case surfaces a genuine schema gap — some publications match 3+ SDGs and the current 2-fixed-column design can't represent that. Needs a decision before/during Phase 4: accept the 2-max cap as a product simplification, or add a proper `publication_sdgs` many-to-many table.
 - `sso_integration_guide.md` contains a Developer Bypass credential and must never be committed — already gitignored since project start.
+- Real production data also has a `superadmin` vs `admin` role distinction in `users` that the original codebase captured in the UI (admin/users.php) but never actually enforced anywhere — was a live privilege-escalation bug, fixed 2026-08-19 (4f52f16).
+- Credentials (DB password, Scopus API key, SSO client secret) found hardcoded in `config/db.php` were moved to a gitignored `config/secrets.local.php` (34f7360) but have NOT been rotated with their providers yet — still pending, should happen before any real deployment.
 - Hard external deadline: presentation 2026-09-03 (16 days from 2026-08-18) — keep phase execution tight to this timeline.
 
 ## Deferred Items
@@ -80,6 +82,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-18
-Stopped at: ROADMAP.md and STATE.md created; REQUIREMENTS.md traceability updated
+Last session: 2026-08-19
+Stopped at: Phase 1 (e3fc4d4, 4f52f16) and Phase 2 (6024c18) implemented, tested against real production data via local Docker stack, and pushed to master. Next: Phase 3 (Researcher Directory & Local-Aggregate Reports) — note researchers_list.php and reports.php already exist from the pre-existing codebase, same pattern as Phase 2 (verify against requirements, fix real gaps, rather than rewrite from scratch).
 Resume file: None

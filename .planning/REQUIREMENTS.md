@@ -15,26 +15,26 @@ Confirmed against the actual production codebase and a live Elsevier API test �
 
 ### Scopus Sync Engine
 
-- [ ] **SYNC-01**: System syncs publication/researcher data from Scopus API into MySQL; on API timeout, retries up to 3 times with exponential backoff (5s/15s/45s), then cancels the whole batch and marks `sync_log` as "failed" with an error message
-- [ ] **SYNC-02**: On Scopus HTTP 429 (rate limit), system pauses per the response header's retry time (or 60s fallback) and retries, canceling after 3 attempts like the timeout case
-- [ ] **SYNC-03**: Individual records with incomplete data (e.g. missing DOI, null author) are skipped without failing the whole sync; the number of skipped records is recorded in `sync_log`
-- [ ] **SYNC-04**: A sync record whose Scopus Author ID duplicates an existing researcher is rejected (not auto-merged) and flagged in `sync_log` for manual review
-- [ ] **SYNC-05**: Public pages remain accessible and unaffected while a sync is in progress (sync must never lock public reads)
+- [x] **SYNC-01**: System syncs publication/researcher data from Scopus API into MySQL; on API timeout, retries up to 3 times with exponential backoff (5s/15s/45s), then cancels the whole batch and marks `sync_log` as "failed" with an error message
+- [x] **SYNC-02**: On Scopus HTTP 429 (rate limit), system pauses per the response header's retry time (or 60s fallback) and retries, canceling after 3 attempts like the timeout case
+- [x] **SYNC-03**: Individual records with incomplete data (e.g. missing DOI, null author) are skipped without failing the whole sync; the number of skipped records is recorded in `sync_log`
+- [x] **SYNC-04**: A sync record whose Scopus Author ID duplicates an existing researcher is rejected (not auto-merged) and flagged in `sync_log` for manual review
+- [x] **SYNC-05**: Public pages remain accessible and unaffected while a sync is in progress (sync must never lock public reads)
 
 ### Dashboard
 
-- [ ] **DASH-01**: Public dashboard shows total researcher count, total publication count, and total citation count
-- [ ] **DASH-02**: Public dashboard shows Scopus quartile distribution (Q1–Q4 + unclassified)
-- [ ] **DASH-03**: Public dashboard shows top researchers by publication count, citations, and h-index
-- [ ] **DASH-04**: Public dashboard shows yearly publication statistics
-- [ ] **DASH-05**: Public dashboard lists recent publications with authors, journal, DOI, quartile, citation count, funding source, and collaborating countries
-- [ ] **DASH-06**: Every public page shows the "last synced" timestamp
+- [x] **DASH-01**: Public dashboard shows total researcher count, total publication count, and total citation count
+- [x] **DASH-02**: Public dashboard shows Scopus quartile distribution (Q1–Q4 + unclassified)
+- [x] **DASH-03**: Public dashboard shows top researchers by publication count, citations, and h-index
+- [x] **DASH-04**: Public dashboard shows yearly publication statistics
+- [x] **DASH-05**: Public dashboard lists recent publications with authors, journal, DOI, quartile, citation count, funding source, and collaborating countries
+- [x] **DASH-06**: Every public page shows the "last synced" timestamp
 
 ### Publication Search
 
-- [ ] **SEARCH-01**: User can search publications by title or author name using partial match
-- [ ] **SEARCH-02**: User can filter search results by Scopus quartile
-- [ ] **SEARCH-03**: Search results paginate at 20 per page, sorted by publication year descending by default
+- [x] **SEARCH-01**: User can search publications by title or author name using partial match
+- [x] **SEARCH-02**: User can filter search results by Scopus quartile
+- [x] **SEARCH-03**: Search results paginate at 20 per page, sorted by publication year descending by default
 
 ### Researcher Directory
 
@@ -113,20 +113,20 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SYNC-01 | Phase 1 | Pending |
-| SYNC-02 | Phase 1 | Pending |
-| SYNC-03 | Phase 1 | Pending |
-| SYNC-04 | Phase 1 | Pending |
-| SYNC-05 | Phase 1 | Pending |
-| DASH-01 | Phase 2 | Pending |
-| DASH-02 | Phase 2 | Pending |
-| DASH-03 | Phase 2 | Pending |
-| DASH-04 | Phase 2 | Pending |
-| DASH-05 | Phase 2 | Pending |
-| DASH-06 | Phase 2 | Pending |
-| SEARCH-01 | Phase 2 | Pending |
-| SEARCH-02 | Phase 2 | Pending |
-| SEARCH-03 | Phase 2 | Pending |
+| SYNC-01 | Phase 1 | Done |
+| SYNC-02 | Phase 1 | Done |
+| SYNC-03 | Phase 1 | Done |
+| SYNC-04 | Phase 1 | Done |
+| SYNC-05 | Phase 1 | Done |
+| DASH-01 | Phase 2 | Done |
+| DASH-02 | Phase 2 | Done |
+| DASH-03 | Phase 2 | Done |
+| DASH-04 | Phase 2 | Done |
+| DASH-05 | Phase 2 | Done |
+| DASH-06 | Phase 2 | Done |
+| SEARCH-01 | Phase 2 | Done |
+| SEARCH-02 | Phase 2 | Done |
+| SEARCH-03 | Phase 2 | Done |
 | RESEARCHER-01 | Phase 3 | Pending |
 | RESEARCHER-02 | Phase 3 | Pending |
 | RESEARCHER-03 | Phase 3 | Pending |
@@ -157,4 +157,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-08-18*
-*Last updated: 2026-08-19 — SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*
+*Last updated: 2026-08-19 — Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*

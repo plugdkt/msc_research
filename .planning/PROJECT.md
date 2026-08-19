@@ -12,13 +12,12 @@
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] ซิงค์ข้อมูลผลงานตีพิมพ์/นักวิจัยจาก Scopus API เข้าสู่ MySQL พร้อม error handling (timeout retry, rate limit backoff, ข้อมูลไม่สมบูรณ์ skip record, Scopus Author ID ซ้ำ reject) — Phase 1, ทดสอบกับ production data จริง 85 นักวิจัย ไม่มี error (2026-08-19)
+- [x] แดชบอร์ดหลักแสดงภาพรวม (จำนวนนักวิจัย, ผลงาน, citations, สัดส่วน quartile, ผู้มีผลงาน/citations/h-index สูงสุด, สถิติรายปี, ผลงานล่าสุด) — Phase 2, verified ผ่าน curl ทุกหน้า ไม่มี error (2026-08-19)
+- [x] ค้นหา/กรองผลงานวิจัยตาม title + author (partial match) และ Scopus quartile พร้อม pagination 20 รายการ/หน้า — Phase 2, แก้ bug pagination 15→20 แล้ว (2026-08-19)
 
 ### Active
 
-- [ ] ซิงค์ข้อมูลผลงานตีพิมพ์/นักวิจัยจาก Scopus API เข้าสู่ MySQL พร้อม error handling (timeout retry, rate limit backoff, ข้อมูลไม่สมบูรณ์ skip record, Scopus Author ID ซ้ำ reject)
-- [ ] แดชบอร์ดหลักแสดงภาพรวม (จำนวนนักวิจัย, ผลงาน, citations, สัดส่วน quartile, ผู้มีผลงาน/citations/h-index สูงสุด, สถิติรายปี, ผลงานล่าสุด)
-- [ ] ค้นหา/กรองผลงานวิจัยตาม title + author (partial match) และ Scopus quartile พร้อม pagination 20 รายการ/หน้า
 - [ ] ทำเนียบนักวิจัย กรองตามภาควิชา/ประเภทบุคลากร เรียงตามผลงาน/citations/h-index (default descending, toggle ascending ได้) พร้อม pagination
 - [ ] รายงานสรุปวิเคราะห์หลายแท็บ (แนวโน้ม, แยกภาควิชา, quartiles, ความร่วมมือระหว่างประเทศ, แหล่งทุน, SDGs, จัดอันดับนักวิจัย, สถิติรายปี, sources, author roles)
 - [ ] SDG mapping ผ่าน CSV import โดย admin (จับคู่ด้วย DOI หรือ title) — ผูกได้สูงสุด 2 SDG ต่อผลงานพร้อม rationale, ไม่มี SDG ที่ match เลย = Unclassified (ดูเหตุผลที่เปลี่ยนจาก auto-mapping แบบ weight ใน Key Decisions)
@@ -82,4 +81,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 — resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*
+*Last updated: 2026-08-19 — Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*

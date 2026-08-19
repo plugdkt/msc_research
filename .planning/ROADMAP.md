@@ -12,8 +12,8 @@ The system starts as a one-way pipeline problem: nothing else can be built until
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Scopus Sync Engine & Data Foundation** - Publication/researcher data reliably syncs from Scopus into MySQL with full error handling, verified against the real schema and API, while public reads stay unaffected
-- [ ] **Phase 2: Public Dashboard & Search** - Public users can view an at-a-glance dashboard and search publications by title/author/quartile
+- [x] **Phase 1: Scopus Sync Engine & Data Foundation** - Publication/researcher data reliably syncs from Scopus into MySQL with full error handling, verified against the real schema and API, while public reads stay unaffected
+- [x] **Phase 2: Public Dashboard & Search** - Public users can view an at-a-glance dashboard and search publications by title/author/quartile
 - [ ] **Phase 3: Researcher Directory & Local-Aggregate Reports** - Users can browse a filterable researcher directory and the six local-aggregate report tabs
 - [ ] **Phase 4: SDG Mapping & Extended Reports** - Every publication is auto-tagged with SDGs and the four field-dependent report tabs are available
 - [ ] **Phase 5: Admin SSO & Sync Control** - An authenticated admin can safely trigger syncs via MEDSCI ACC SSO with audit logging
@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Records with incomplete data (missing DOI, null author) are skipped without failing the whole sync, and the skipped-record count is recorded in `sync_log`
   5. A sync record whose Scopus Author ID duplicates an existing researcher is rejected (not merged) and flagged in `sync_log` for manual review, while locally-maintained researcher fields (department, staff type, Thai name, `is_active`) survive re-sync unchanged
   6. Concurrent reads against the live tables, checked from a second DB session/CLI reader, return complete non-empty rows throughout an in-flight sync — no read lock, no empty or partial window
-**Plans**: TBD
+**Status (2026-08-19)**: Complete. Implemented in admin/sync.php + includes/functions.php (e3fc4d4), tested against real production data via local Docker stack — 85 researchers with real Scopus Author IDs, zero errors, correct skip counts, idempotent re-sync (774→776, no duplication), migration script verified against the real pre-Phase-1 schema. Criterion 6 verified architecturally (short per-publication transactions) rather than under actual concurrent load testing.
 
 ### Phase 2: Public Dashboard & Search
 **Goal**: Public users can view an at-a-glance dashboard and search publications, using the verified quartile field and gracefully handling fields Scopus doesn't always provide
@@ -45,7 +45,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Dashboard shows yearly publication statistics and a list of recent publications with authors, journal, DOI, quartile, and citation count — plus funding source and collaborating countries when Scopus provides them, with an explicit placeholder when it doesn't
   4. Every public page displays the "last synced" timestamp
   5. User can search publications by title or author name using partial match, filter results by Scopus quartile, with results paginated at 20/page sorted by publication year descending by default
-**Plans**: TBD
+**Status (2026-08-19)**: Complete. index.php and publications_search.php already existed from the pre-existing codebase and covered DASH-01..05/SEARCH-01/02; found and fixed two real gaps: DASH-06 was missing from 3 of 5 public pages (added get_last_sync_time() reading sync_log, rendered once in includes/header.php) and SEARCH-03 had $limit=15 instead of 20 (6024c18). Verified via curl across all 5 public pages: HTTP 200, no PHP warnings/errors, correct pagination (776 pubs / 20 = 39 pages).
 **UI hint**: yes
 
 ### Phase 3: Researcher Directory & Local-Aggregate Reports
@@ -98,8 +98,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scopus Sync Engine & Data Foundation | 0/TBD | Not started | - |
-| 2. Public Dashboard & Search | 0/TBD | Not started | - |
+| 1. Scopus Sync Engine & Data Foundation | - | Complete | 2026-08-19 |
+| 2. Public Dashboard & Search | - | Complete | 2026-08-19 |
 | 3. Researcher Directory & Local-Aggregate Reports | 0/TBD | Not started | - |
 | 4. SDG Mapping & Extended Reports | 0/TBD | Not started | - |
 | 5. Admin SSO & Sync Control | 0/TBD | Not started | - |
