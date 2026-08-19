@@ -88,11 +88,15 @@ $suggestions = array_map(function ($r) {
     ];
 }, $top);
 
+$dict_info = get_sdg_dictionary_info();
+
 echo json_encode([
     'publication_id' => $pub_id,
     'used_abstract' => !empty($pub['abstract']),
     'used_keywords' => !empty($pub['keywords']),
     'fetched_new_data' => $fetched_new_data,
+    'dictionary_source' => $dict_info['source'],
+    'dictionary_label' => $dict_info['label'],
     'suggestions' => $suggestions,
     'total_candidates' => count($results),
 ]);

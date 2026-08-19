@@ -1019,15 +1019,76 @@ function fetch_scopus_abstract_details_with_retry($doi, $api_key) {
  *
  * @return array List of ['num','name','name_th','color','score','matched'] sorted by score descending, score > 0 only
  */
-function score_publication_sdgs($title, $keywords, $abstract) {
-    static $sdg_data = null;
-    if ($sdg_data === null) {
-        $json_path = __DIR__ . '/../data/sdg_data.json';
-        $sdg_data = file_exists($json_path) ? json_decode(file_get_contents($json_path), true) : [];
-        if (!is_array($sdg_data)) {
-            $sdg_data = [];
+/**
+ * Resolves and returns the active SDG dictionary and its source metadata.
+ * Prioritizes live dictionary from msc_sdgs (C:/inetpub/wwwroot/msc_sdgs/sdg_data.json),
+ * falling back to the bundled copy (data/sdg_data.json) if unreadable.
+ *
+ * @return array ['source' => 'live'|'bundled'|'none', 'path' => string, 'data' => array, 'count' => int, 'label' => string]
+ */
+function get_sdg_dictionary_info() {
+    static $info = null;
+    if ($info !== null) {
+        return $info;
+    }
+
+    $candidates = [
+        'live' => [
+            'C:/inetpub/wwwroot/msc_sdgs/sdg_data.json',
+            dirname(__DIR__) . '/../msc_sdgs/sdg_data.json',
+        ],
+        'bundled' => [
+            __DIR__ . '/../data/sdg_data.json',
+        ]
+    ];
+
+    foreach ($candidates['live'] as $path) {
+        if (file_exists($path) && is_readable($path)) {
+            $content = @file_get_contents($path);
+            $data = $content ? json_decode($content, true) : null;
+            if (is_array($data) && !empty($data)) {
+                $info = [
+                    'source' => 'live',
+                    'path' => $path,
+                    'data' => $data,
+                    'count' => count($data),
+                    'label' => 'Live: msc_sdgs'
+                ];
+                return $info;
+            }
         }
     }
+
+    foreach ($candidates['bundled'] as $path) {
+        if (file_exists($path) && is_readable($path)) {
+            $content = @file_get_contents($path);
+            $data = $content ? json_decode($content, true) : null;
+            if (is_array($data) && !empty($data)) {
+                $info = [
+                    'source' => 'bundled',
+                    'path' => $path,
+                    'data' => $data,
+                    'count' => count($data),
+                    'label' => 'Bundled copy'
+                ];
+                return $info;
+            }
+        }
+    }
+
+    $info = [
+        'source' => 'none',
+        'path' => '',
+        'data' => [],
+        'count' => 0,
+        'label' => 'None'
+    ];
+    return $info;
+}
+
+function score_publication_sdgs($title, $keywords, $abstract) {
+    $info = get_sdg_dictionary_info();
+    $sdg_data = $info['data'];
     if (empty($sdg_data)) {
         return [];
     }

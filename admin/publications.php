@@ -537,8 +537,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderSuggestions(data) {
         resultsEl.innerHTML = '';
+        let badgeHtml = '';
+        if (data.dictionary_source === 'live') {
+            badgeHtml = '<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(16, 185, 129, 0.15); color:#10b981; border:1px solid rgba(16, 185, 129, 0.3); font-size:0.72rem; padding:2px 8px; border-radius:12px; font-weight:500;"><i class="fa-solid fa-bolt"></i> Live: msc_sdgs</span>';
+        } else if (data.dictionary_source === 'bundled') {
+            badgeHtml = '<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(245, 158, 11, 0.15); color:#f59e0b; border:1px solid rgba(245, 158, 11, 0.3); font-size:0.72rem; padding:2px 8px; border-radius:12px; font-weight:500;"><i class="fa-solid fa-box-archive"></i> Bundled copy</span>';
+        }
+
+        statusEl.innerHTML = badgeHtml;
         if (data.warning) {
-            statusEl.innerHTML = '<span style="color:#f59e0b;"><i class="fa-solid fa-triangle-exclamation"></i> ' + escapeHtml(data.warning) + '</span>';
+            statusEl.innerHTML += '<div style="color:#f59e0b; margin-top:4px;"><i class="fa-solid fa-triangle-exclamation"></i> ' + escapeHtml(data.warning) + '</div>';
         }
         if (!data.suggestions || data.suggestions.length === 0) {
             statusEl.innerHTML += '<div style="color: var(--color-text-muted); margin-top: 4px;">ไม่พบคำสำคัญที่ตรงกับ SDG ใดเลย (อาจเป็นเพราะยังไม่มีบทคัดย่อ/คำสำคัญของผลงานนี้)</div>';
