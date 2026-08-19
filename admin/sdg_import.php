@@ -113,25 +113,27 @@ function process_sdg_csv($pdo, $filePath) {
             $sdg_secondary = trim($sdg_secondary);
             $rationale = trim($rationale);
 
-            // Basic normalization (e.g. if CSV contains "SDG 3", keep it, otherwise format "SDG X")
+            // Normalize to a canonical "SDG N" (N = 1-17) or null — SDG-03
+            // requires unclassified publications to be null/blank, never an
+            // arbitrary string. A previous version of this closure fell
+            // through to `return $val` for anything unrecognized, which is
+            // how values like "ไม่ทราบ" ("unknown") ended up stored as if
+            // they were a real SDG label. Anything that isn't a valid
+            // SDG 1-17 now normalizes to null instead of being kept as-is.
             $normalize_sdg = function($val) {
                 if (empty($val)) return null;
                 $val = trim(str_replace(['(?)', '( ? )', '?'], '', $val));
                 $val = trim(strtoupper($val));
                 if (empty($val)) return null;
-                if (preg_match('/^SDG\s*\d+$/', $val)) {
-                    $num = (int)preg_replace('/[^0-9]/', '', $val);
-                    return "SDG " . $num;
+
+                $num = null;
+                if (preg_match('/^SDG\s*(\d+)$/', $val, $matches)) {
+                    $num = (int)$matches[1];
+                } elseif (is_numeric($val)) {
+                    $num = (int)$val;
                 }
-                // Handle raw digits e.g. "3" -> "SDG 3"
-                if (is_numeric($val) && (int)$val >= 1 && (int)$val <= 17) {
-                    return "SDG " . (int)$val;
-                }
-                // Handle short codes e.g. "SDG3" -> "SDG 3"
-                if (preg_match('/^SDG(\d+)$/', $val, $matches)) {
-                    return "SDG " . (int)$matches[1];
-                }
-                return $val; // Keep as is if special
+
+                return ($num !== null && $num >= 1 && $num <= 17) ? "SDG {$num}" : null;
             };
 
             $sdg_primary = $normalize_sdg($sdg_primary);

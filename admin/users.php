@@ -8,6 +8,15 @@ $page_title = 'จัดการสิทธิ์แอดมิน - Admin Pa
 require_once __DIR__ . '/admin_header.php';
 require_once __DIR__ . '/../config/db.php';
 
+// SECURITY: this page grants/revokes admin access and sets roles (including
+// superadmin) for ANY username — without this gate, any logged-in 'admin'
+// could grant themselves 'superadmin' or add/remove other admins, making
+// the two-tier role model meaningless. Only superadmin may manage users.
+if (($_SESSION['admin_role'] ?? '') !== 'superadmin') {
+    http_response_code(403);
+    die('เฉพาะ Superadmin เท่านั้นที่มีสิทธิ์จัดการผู้ใช้งาน');
+}
+
 $message = '';
 $message_type = 'success';
 $current_username = $_SESSION['admin_username'] ?? '';

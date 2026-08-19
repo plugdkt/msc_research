@@ -10,3 +10,9 @@ config.php
 # Production codebase merge (2026-08-19) — working/reference files not meant to be tracked
 /Q data.xlsx
 /scratch/
+
+# Real production data dumps (real password hashes, staff emails, real Scopus
+# IDs) — used locally for testing against real schema/data, must never be
+# committed to this public repo.
+/database/msc_research.sql
+/database/researchers.sql

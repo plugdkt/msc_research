@@ -81,7 +81,10 @@ if (isset($_POST['create_admin']) && $schema_ready && !$already_has_admin) {
         $status = "error";
     } else {
         try {
-            $stmt = $pdo->prepare("INSERT INTO `users` (username, password_hash, role) VALUES (?, ?, 'admin')");
+            // The bootstrap account is the project owner — created as
+            // superadmin so it can manage other admins via admin/users.php
+            // (which is gated to superadmin only).
+            $stmt = $pdo->prepare("INSERT INTO `users` (username, password_hash, role) VALUES (?, ?, 'superadmin')");
             $stmt->execute([$new_username, password_hash($new_password, PASSWORD_DEFAULT)]);
             $admin_created = true;
             $already_has_admin = true;

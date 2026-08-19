@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS `corresponding_publications` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- SYNC-01..05: audit trail for every sync run (manual or cron-triggered).
--- One row per run; `status` moves running -> success|partial|failed.
+-- One row per run. `status` moves running -> success|partial|failed.
 CREATE TABLE IF NOT EXISTS `sync_log` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `started_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

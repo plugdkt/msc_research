@@ -156,9 +156,11 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                         <a href="sync.php" class="dropdown-item <?php echo $current_page === 'admin_sync' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-rotate"></i> Sync API
                         </a>
+                        <?php if (($_SESSION['admin_role'] ?? '') === 'superadmin'): ?>
                         <a href="users.php" class="dropdown-item <?php echo $current_page === 'admin_users' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-users-cog"></i> จัดการแอดมิน
                         </a>
+                        <?php endif; ?>
                         <a href="scopus_quartiles.php" class="dropdown-item <?php echo $current_page === 'admin_scimago' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-award"></i> จัดการ Quartiles (Scopus)
                         </a>
