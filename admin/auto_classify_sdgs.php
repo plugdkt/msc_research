@@ -38,7 +38,13 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
-const MIN_AUTO_APPLY_SCORE = 0.4;
+// Raised from an initial 0.4 to 1.0 per server-side review (2026-08-19):
+// this data is published on the faculty's public reports, so a strict bar
+// (effectively "at least one full-phrase keyphrase match", since a single
+// full match scores its full rel weight and most rel values run close to
+// 1.0) matters more than covering every publication automatically. Below
+// this, a publication is left Unclassified for manual review instead.
+const MIN_AUTO_APPLY_SCORE = 1.0;
 
 $action = $_GET['action'] ?? '';
 

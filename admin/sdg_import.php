@@ -317,7 +317,7 @@ if (isset($_POST['upload_csv'])) {
                 </h4>
                 <p style="margin: 0; font-size: 0.82rem; color: var(--color-text-muted);">
                     กวาดตรวจผลงานที่ยัง Unclassified ทั้งหมด (<?php echo number_format($unclassified_pubs); ?> เรื่อง) ดึงบทคัดย่อ/คำสำคัญจาก Scopus แล้วจับคู่กับพจนานุกรม
-                    <strong>เขียน SDG หลัก/รองอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (≥ <span id="min-score-label">0.4</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
+                    <strong>เขียน SDG หลัก/รองอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (≥ <span id="min-score-label">1.0</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-shrink:0;">
