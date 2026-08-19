@@ -19,6 +19,13 @@ define('SSO_CLIENT_SECRET', 'CHANGE_ME');
 define('SSO_LOGIN_URL', 'https://www.medsci.up.ac.th/msc_acc/sso/login.php');
 define('SSO_VERIFY_URL', 'https://www.medsci.up.ac.th/msc_acc/api/verify.php');
 
+// Leave unset (defaults to true / verification ON). Only set this to false
+// if this specific server has a genuinely broken internal CA chain AND you
+// understand that it lets anyone on the network path forge the SSO verify
+// response and log in as any user - the real fix is pointing curl.cainfo in
+// php.ini at an up-to-date cacert.pem, not this.
+// define('SSO_SSL_VERIFY', false);
+
 // Optional dev-only convenience: a username that is auto-provisioned as
 // admin the first time it successfully authenticates via SSO. Leave this
 // commented out (or empty) on any server other than your own dev machine.

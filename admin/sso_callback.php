@@ -26,7 +26,16 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
     'client_id' => $client_id,
     'client_secret' => $client_secret
 ]));
-$ssl_verify = defined('SSO_SSL_VERIFY') ? (bool)SSO_SSL_VERIFY : false;
+// SECURITY: default MUST be true. This call carries client_secret and is
+// what proves a token really came from MEDSCI ACC - verifying it off by
+// default lets anyone on the network path forge a verify response and log
+// in as any user. SSO_SSL_VERIFY exists only as an explicit, deliberate
+// escape hatch (e.g. a genuinely broken internal CA chain on this specific
+// server) - set it in config/secrets.local.php only if you understand that
+// tradeoff, and prefer fixing the real cause instead: point curl.cainfo in
+// php.ini at an up-to-date cacert.pem bundle rather than disabling
+// verification.
+$ssl_verify = defined('SSO_SSL_VERIFY') ? (bool)SSO_SSL_VERIFY : true;
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $ssl_verify);
 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $ssl_verify ? 2 : 0);
 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
