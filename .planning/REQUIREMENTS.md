@@ -89,9 +89,12 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - **SYNC-06**: Scheduled/automatic background sync (cron-triggered), once the manual-trigger flow is proven stable
 
-### SDG Auto-Mapping
+### SDG Auto-Mapping & In-House Integration (v2 Milestone)
 
-- **SDG-06**: Automatic SDG tagging at sync time via the Elsevier SciVal Publication Lookup API (`analytics/scival/publication/{id}`), replacing the v1 manual CSV import — blocked on the university obtaining SciVal API entitlement from Elsevier (confirmed absent from the current key as of 2026-08-19; the key has standard Scopus Search access only)
+- **SDG-06a (Dictionary Foundation)**: Integrate `sdg_data.json` from `C:\inetpub\wwwroot\msc_sdgs` (790KB+ curated 17 SDGs dictionary containing keywords, Thai/English names, colors, and relevance weights `rel`) as the core SDG vocabulary.
+- **SDG-06b (Auto-Suggest on Review)**: Add an interactive "Suggest SDGs" feature in `admin/publications.php` and `admin/sdg_import.php` that scores a publication's Title, Abstract, and Keywords against `sdg_data.json` and proposes top-2 matching SDGs with match rationales.
+- **SDG-06c (Batch Auto-Classify)**: Provide a one-click batch auto-classification tool for admins to automatically tag unclassified publications using weighted keyword scoring.
+- **SDG-06d (Cross-System Exploration)**: Add deep-dive links from `reports.php` (SDG statistics tab) to the `/msc_sdgs` portal for exploring faculty-wide keyword trend visualizations.
 
 ## Out of Scope
 

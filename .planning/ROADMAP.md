@@ -92,13 +92,22 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Every sync trigger records the triggering user in `sync_log.triggered_by`
   5. Unauthenticated requests to the sync-trigger endpoint are rejected (401/redirect to login), never executed
 **Status (2026-08-19)**: Complete - the last phase. ADMIN-01/02/04/05 were already correct (verified via the Docker stack, not assumed). ADMIN-03 was a genuine gap: sync_log wrote 'running' rows but nothing ever checked for an existing one before starting a new sync. Fixed with a check-then-insert mutex in run_synchronization() (30-minute staleness window so a crashed sync can't permanently jam the system), verified live by simulating both a real overlap (rejected with the exact SPEC.md message) and a stale lock (correctly recovered). Also restructured the auth-check ordering in admin/sync.php so the HTTP 409 response (required for the rejection case) actually takes effect - PHP can't change the status code after admin_header.php starts printing HTML, which the first version of this fix didn't account for.
-**Plans**: TBD
-**UI hint**: yes
+### Phase 6 (v2 Milestone): In-House SDG Key Phrases Integration
+**Goal**: Integrate the curated SDG dictionary (`sdg_data.json`) and Scopus abstract matcher from `msc_sdgs` to provide automated SDG suggestions, batch auto-tagging, and cross-system exploration.
+**Mode:** enhancement
+**Depends on**: Phase 4, Phase 5
+**Requirements**: SDG-06a, SDG-06b, SDG-06c, SDG-06d
+**Success Criteria** (what must be TRUE):
+  1. `sdg_data.json` from `C:\inetpub\wwwroot\msc_sdgs` is bundled / loaded to provide weighted keyword mapping for all 17 SDGs.
+  2. Admin can click "Suggest SDGs" for any publication to get top-2 recommended SDGs based on keyword relevance scores computed from Title, Abstract, and Keywords.
+  3. Admin can run a Batch Auto-Classification action that automatically categorizes Unclassified publications into matching SDGs with match confidence logged.
+  4. Public users on `reports.php` (SDG statistics tab) have an interactive link to explore deep-dive keyword visual analysis on the `/msc_sdgs` portal.
+**Status**: Planned for v2 (Documented and referenced in `.planning/research/SDG_MAPPING_SYSTEM.md`).
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -107,10 +116,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Researcher Directory & Local-Aggregate Reports | - | Complete | 2026-08-19 |
 | 4. SDG Mapping & Extended Reports | - | Complete | 2026-08-19 |
 | 5. Admin SSO & Sync Control | - | Complete | 2026-08-19 |
+| 6. In-House SDG Key Phrases Integration (v2) | - | Planned | - |
 
 ## Coverage Notes
 
-- **2026-08-19 update**: SDG mapping in Phase 4 is CSV-import-based for v1, not Scopus/SciVal weight-based — the project's Scopus API key was tested directly against the SciVal Publication Lookup API and returned `403 ENTITLEMENTS_ERROR` (Scopus Search access confirmed, no SciVal entitlement). Automatic SciVal-based mapping is tracked as v2 requirement SDG-06 in REQUIREMENTS.md, pending a separate entitlement request. Quartile data source is also confirmed as the existing manual Scimago Excel import (no public Scimago API exists) — Phase 1 doesn't need to "discover" this, just verify the import still works against the real schema.
-- All 36 v1 requirements are mapped to exactly one phase (5/5 phases, 0 orphans).
-- **Watch item carried from research:** DASH-05 (recent publications list) and REPORT-03/04/05 (collaboration, funding, author roles tabs) depend on Scopus fields (funding-sponsor, affiliation-country) that research flagged as unverified/historically sparse. Phase 1's success criterion #1 verifies these fields' presence early. If verification comes back negative (fields absent or unusable), DASH-05's degraded-placeholder behavior already covers it, but REPORT-03/04/05 would need an explicit decision — either accept sparse/partial tabs or move them to v2 in REQUIREMENTS.md — rather than a mid-build fudge during Phase 4 planning.
-- Phase 3's roster-master-data question (department, staff type, Thai name, `is_active` source) is resolved as part of Phase 1 (criterion #5: locally-maintained fields must survive re-sync), so Phase 3 can build the directory against a confirmed data-ownership model rather than rediscovering it.
+- **2026-08-19 update (SDG Mapping Evolution)**: In v1, SDG mapping was stabilized using CSV import (Phase 4). For v2, rather than depending on the commercial Elsevier SciVal API (which returned 403 Entitlement Error), the project will integrate the in-house `msc_sdgs` keyword matching engine and dictionary (`sdg_data.json`, 790KB+ with relevance weights across all 17 SDGs) as Phase 6.
+- All 36 v1 requirements are mapped to exactly one phase (5/5 phases complete, 0 orphans).
+- Pre-deployment checklist on the live IIS server verified complete (2026-08-19). Ready for the September 3, 2026 presentation.
