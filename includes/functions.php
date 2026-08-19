@@ -917,6 +917,188 @@ function fetch_scopus_publications_with_retry($scopus_author_id, $api_key, &$ski
 }
 
 /**
+ * Phase 6 (SDG-06a/b): fetch the real abstract text and author keywords for
+ * one publication from the Scopus Abstract Retrieval API.
+ *
+ * This is a separate, per-publication call from fetch_scopus_publications()'s
+ * bulk Search API - the Search API does not return real abstract/keyword
+ * data (a previous version of this codebase mistakenly stored
+ * `subtypeDescription`, the document type, in the `abstract` column). SDG
+ * keyword matching needs the real text, so this is called on demand
+ * (backfill) rather than inline during every regular sync, to keep the
+ * regular sync fast and avoid one extra API call per publication on every run.
+ *
+ * @return array{abstract: ?string, keywords: ?string}
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException
+ */
+function fetch_scopus_abstract_details($doi, $api_key) {
+    if (empty($doi)) {
+        return ['abstract' => null, 'keywords' => null];
+    }
+
+    $url = "https://api.elsevier.com/content/abstract/doi/" . urlencode($doi);
+    $data = http_get_json($url, ["X-ELS-APIKey: {$api_key}"], 10);
+
+    $resp = $data['abstracts-retrieval-response'] ?? null;
+    if (!$resp) {
+        return ['abstract' => null, 'keywords' => null];
+    }
+
+    $core = $resp['coredata'] ?? [];
+    $abstract = !empty($core['dc:description']) ? trim($core['dc:description']) : null;
+
+    $kw_list = [];
+    $raw_kw = $resp['authkeywords']['author-keyword'] ?? null;
+    if (is_array($raw_kw)) {
+        foreach ($raw_kw as $item) {
+            if (is_array($item) && isset($item['$'])) {
+                $kw_list[] = trim($item['$']);
+            } elseif (is_string($item)) {
+                $kw_list[] = trim($item);
+            }
+        }
+    }
+    $keywords = !empty($kw_list) ? implode(', ', $kw_list) : null;
+
+    return ['abstract' => $abstract, 'keywords' => $keywords];
+}
+
+/**
+ * fetch_scopus_abstract_details() wrapped with the same SYNC-01/02 retry
+ * contract as the main sync (timeout: 3x with 5s/15s/45s backoff; 429: wait
+ * per header or 60s fallback). A 404 (Scopus has no abstract record for
+ * this DOI - not uncommon) is treated as "no data" rather than an error,
+ * since it's expected for some publications, not a transient failure.
+ *
+ * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ */
+function fetch_scopus_abstract_details_with_retry($doi, $api_key) {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_scopus_abstract_details($doi, $api_key);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[scopus][abstract] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[scopus][abstract] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiHttpException $e) {
+            if ($e->httpCode === 404) {
+                return ['abstract' => null, 'keywords' => null];
+            }
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException(
+        "Scopus abstract fetch failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
+}
+
+/**
+ * Phase 6 (SDG-06b/06c): score a publication's title/keywords/abstract
+ * against the bundled SDG keyphrase dictionary (data/sdg_data.json, a copy
+ * of the in-house msc_sdgs tool's dictionary - see
+ * .planning/research/SDG_MAPPING_SYSTEM.md).
+ *
+ * Ports the exact same algorithm the msc_sdgs tool uses client-side
+ * (matchSDG() in its app_template.php), so results are consistent with what
+ * that tool would show for the same text: a keyphrase matching in full
+ * scores its full relevance weight; a multi-word keyphrase with >=60% of
+ * its individual words present scores a discounted partial credit
+ * (rel * word_fraction * 0.4). msc_sdgs's own tool also takes intro/
+ * discussion/conclusion text, which Scopus metadata doesn't provide - this
+ * necessarily works with a weaker signal (title + keywords + abstract only).
+ *
+ * @return array List of ['num','name','name_th','color','score','matched'] sorted by score descending, score > 0 only
+ */
+function score_publication_sdgs($title, $keywords, $abstract) {
+    static $sdg_data = null;
+    if ($sdg_data === null) {
+        $json_path = __DIR__ . '/../data/sdg_data.json';
+        $sdg_data = file_exists($json_path) ? json_decode(file_get_contents($json_path), true) : [];
+        if (!is_array($sdg_data)) {
+            $sdg_data = [];
+        }
+    }
+    if (empty($sdg_data)) {
+        return [];
+    }
+
+    $clean = function ($s) {
+        $s = strtolower((string)($s ?? ''));
+        $s = preg_replace('/[^a-z0-9\s]/', ' ', $s);
+        $s = preg_replace('/\s+/', ' ', $s);
+        return ' ' . trim($s) . ' ';
+    };
+
+    $text = $clean(($title ?? '') . ' ' . ($keywords ?? '') . ' ' . ($abstract ?? ''));
+    if (trim($text) === '') {
+        return [];
+    }
+
+    $results = [];
+    foreach ($sdg_data as $sdg) {
+        $score = 0.0;
+        $matched = [];
+        foreach (($sdg['keyphrases'] ?? []) as $kp) {
+            $phrase = trim($clean($kp['k'] ?? ''));
+            if ($phrase === '') {
+                continue;
+            }
+            $words = array_values(array_filter(explode(' ', $phrase), function ($w) {
+                return strlen($w) > 2;
+            }));
+            $rel = (float)($kp['rel'] ?? 0);
+
+            if (strpos($text, ' ' . $phrase . ' ') !== false) {
+                $score += $rel;
+                $matched[] = ['k' => $kp['k'], 'rel' => $rel, 'full' => true];
+            } elseif (count($words) > 1) {
+                $hit = 0;
+                foreach ($words as $w) {
+                    if (strpos($text, ' ' . $w . ' ') !== false) {
+                        $hit++;
+                    }
+                }
+                $frac = $hit / count($words);
+                if ($frac >= 0.6) {
+                    $score += $rel * $frac * 0.4;
+                    $matched[] = ['k' => $kp['k'], 'rel' => $rel, 'full' => false];
+                }
+            }
+        }
+
+        if ($score > 0) {
+            usort($matched, function ($a, $b) {
+                return ($b['full'] <=> $a['full']) ?: ($b['rel'] <=> $a['rel']);
+            });
+            $results[] = [
+                'num' => (int)($sdg['num'] ?? 0),
+                'name' => $sdg['name'] ?? '',
+                'name_th' => $sdg['name_th'] ?? '',
+                'color' => $sdg['color'] ?? '#64748b',
+                'score' => $score,
+                'matched' => $matched,
+            ];
+        }
+    }
+
+    usort($results, function ($a, $b) {
+        return $b['score'] <=> $a['score'];
+    });
+
+    return $results;
+}
+
+/**
  * Format timestamp into Thai datetime format
  */
 function format_thai_datetime($datetime) {

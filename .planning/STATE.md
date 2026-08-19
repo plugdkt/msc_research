@@ -1,8 +1,8 @@
 ---
 gsd_state_version: '1.0'
-status: v1_complete
+status: v1_complete_v2_in_progress
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
   total_plans: 0
   completed_plans: 0
@@ -16,14 +16,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** ข้อมูลผลงานตีพิมพ์ของคณะที่ซิงค์มาจาก Scopus ต้องถูกต้อง ครบถ้วน และเข้าถึงได้แบบสาธารณะตลอดเวลา แม้ระหว่างที่กำลังซิงค์ข้อมูลอยู่ก็ตาม
-**Current focus:** All 5 phases complete — pre-deployment checklist (see Blockers/Concerns) before the 2026-09-03 presentation
+**Current focus:** v1 (36/36 requirements) is live in production. v2 Phase 6 (In-House SDG Key Phrases Integration) is in progress — SDG-06a/b done and tested, SDG-06c/d deferred (see Blockers/Concerns).
 
 ## Current Position
 
-Phase: 5 of 5 (Admin SSO & Sync Control) — DONE, and it was the last one
+Phase: 6 of 6 (In-House SDG Key Phrases Integration, v2) — in progress
 Plan: 0 of TBD in current phase
-Status: All 36/36 v1 requirements complete and verified against real production data (776 publications, 97 researchers, via local Docker stack). Nothing left in the roadmap - what remains is pre-deployment work, not new features.
-Last activity: 2026-08-19 — Phase 5 (ADMIN-01..05) implemented, tested, and pushed. The one real gap (no mutex/lock against overlapping syncs) is fixed with 30-minute stale-lock recovery.
+Status: SDG-06a (dictionary bundling) and SDG-06b (per-publication Suggest SDGs) implemented and verified end-to-end against the local Docker stack, the real Scopus API, and real production publication data. Not yet committed/pushed to git.
+Last activity: 2026-08-19 — Added `fetch_scopus_abstract_details()`/`_with_retry()` and `score_publication_sdgs()` to `includes/functions.php`; new `admin/suggest_sdgs.php` AJAX endpoint; new "Suggest SDGs" UI in `admin/publications.php`. Live-tested: real Scopus Abstract Retrieval API call fetched real abstract+keywords for a real publication (DOI `10.34172/jech.2022.3`), scoring correctly surfaced SDG 2 (Zero Hunger, score 4.92) as the top match, admin "ใช้เป็น SDG หลัก" button populated the form, and the existing Save flow persisted it correctly to the database (then reverted the test row back to null afterward).
 
 Progress: [██████████] 100%
 
@@ -91,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-19
-Stopped at: **All 5 phases complete (36/36 v1 requirements)**, tested against real production data via local Docker stack, pushed to master. Phase 5 closed out ADMIN-03 (sync mutex/lock - a genuine gap, nothing prevented two overlapping syncs before this) and confirmed ADMIN-01/02/04/05 were already correct. Merged with parallel server-side security commits along the way, including catching and fixing a real security regression (SSO_SSL_VERIFY defaulting to false) introduced by that parallel session - properly fixed on both sides with a real CA bundle (e530575).
-Next: nothing left in the roadmap. What remains is the pre-deployment checklist in Blockers/Concerns above (credential rotation, real IIS/production deploy test, running the sync_log/is_active migration on the real DB, confirming the CA bundle fix against the real MEDSCI ACC endpoint, deleting install.php once bootstrapped) - not new feature work. If asked to "continue," check with the user whether they mean deployment prep or something else, rather than assuming there's another phase to build.
+Stopped at: v1 confirmed live in production. Started v2 Phase 6 (SDG-06a/b implemented and tested against the local Docker stack + real Scopus API + real data - see Current Position above). Not yet committed or pushed - per this project's established pattern, every push needs the user's explicit go-ahead in chat first.
+Next: 1) get the user's push confirmation for the Phase 6 SDG-06a/b work (functions.php additions, admin/suggest_sdgs.php, admin/publications.php UI, database/add_keywords_column.php migration, schema.sql, data/sdg_data.json). 2) SDG-06c (true batch classify-all) needs a CLI/cron-triggered backfill script, not an inline admin action - scope that as a follow-up if the user wants it. 3) SDG-06d needs the real public URL for `msc_sdgs` from the user before adding a cross-link. Do NOT modify anything under `msc_sdgs/` itself - its two known vulnerabilities (SSL verify disabled, hardcoded API key) were flagged to the user only; a separate server-side session owns fixing those.
 Resume file: None

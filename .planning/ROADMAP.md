@@ -102,7 +102,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Admin can click "Suggest SDGs" for any publication to get top-2 recommended SDGs based on keyword relevance scores computed from Title, Abstract, and Keywords.
   3. Admin can run a Batch Auto-Classification action that automatically categorizes Unclassified publications into matching SDGs with match confidence logged.
   4. Public users on `reports.php` (SDG statistics tab) have an interactive link to explore deep-dive keyword visual analysis on the `/msc_sdgs` portal.
-**Status**: Planned for v2 (Documented and referenced in `.planning/research/SDG_MAPPING_SYSTEM.md`).
+**Status**: Partially complete, verified against real Scopus API + production data via local Docker stack, 2026-08-19.
+  - SDG-06a (dictionary foundation): **Done.** `data/sdg_data.json` bundled (796,631 bytes, 17 SDGs, 6,096 keyphrases, copied from the real `msc_sdgs/sdg_data.json`). `score_publication_sdgs()` in `includes/functions.php` ports the exact scoring algorithm from `msc_sdgs`'s client-side `matchSDG()` (full-phrase match = full `rel` weight, partial match ≥60% of words = `rel * fraction * 0.4`).
+  - SDG-06b (auto-suggest on review): **Done**, in `admin/publications.php` only (not `admin/sdg_import.php` - the plan named both, but a per-publication button only makes sense on the per-publication edit form). New `fetch_scopus_abstract_details()` (+ `_with_retry()` wrapper, same 3-attempt/backoff contract as the main sync) fixes the known bug where `abstract` was never real text (`subtypeDescription`, the doc type, was stored there) and `keywords` was never fetched at all - it now calls the real Scopus Abstract Retrieval API on demand and persists the result. New AJAX endpoint `admin/suggest_sdgs.php` backfills abstract/keywords if missing, scores, and returns top-2 SDG suggestions with matched-keyphrase rationale. Admin clicks "ใช้เป็น SDG หลัก/รอง" to populate the form fields - **nothing is auto-applied**; the admin still reviews and clicks the normal Save button. Verified end-to-end against the live Docker stack + real Scopus API key + real production publication data (see Session Continuity below).
+  - SDG-06c (batch auto-classify): **Not implemented as a one-click bulk action.** Real-data check (2026-08-19): 1,883 of 1,945 publications in the test DB are unclassified, and only 1 currently has real abstract/keyword text (everything else was synced before this phase existed). A true "classify everything" pass means one Scopus Abstract Retrieval API call per unclassified publication with a DOI - hundreds to low-thousands of calls, which cannot run inline on an admin page request (same IIS FastCGI timeout risk already documented for the main sync in this project's own stack notes) and must respect Scopus rate limits. This needs a CLI/cron-triggered backfill job (same architecture as the existing sync engine), not a page-load action. Deferred - SDG-06b's per-publication flow is usable today for ad-hoc review; bulk backfill is a follow-up.
+  - SDG-06d (cross-system link to `/msc_sdgs`): **Not done.** Skipped rather than guess the live URL - `msc_sdgs`'s production path was described as `C:\inetpub\wwwroot\msc_sdgs`, but its public URL was never confirmed the way `msc_researchV2`'s was. Needs the actual URL from the user before adding the link.
 
 ## Progress
 
@@ -116,7 +120,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Researcher Directory & Local-Aggregate Reports | - | Complete | 2026-08-19 |
 | 4. SDG Mapping & Extended Reports | - | Complete | 2026-08-19 |
 | 5. Admin SSO & Sync Control | - | Complete | 2026-08-19 |
-| 6. In-House SDG Key Phrases Integration (v2) | - | Planned | - |
+| 6. In-House SDG Key Phrases Integration (v2) | - | Partial (SDG-06a/b done, SDG-06c/d deferred) | 2026-08-19 |
 
 ## Coverage Notes
 

@@ -91,10 +91,10 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ### SDG Auto-Mapping & In-House Integration (v2 Milestone)
 
-- **SDG-06a (Dictionary Foundation)**: Integrate `sdg_data.json` from `C:\inetpub\wwwroot\msc_sdgs` (790KB+ curated 17 SDGs dictionary containing keywords, Thai/English names, colors, and relevance weights `rel`) as the core SDG vocabulary.
-- **SDG-06b (Auto-Suggest on Review)**: Add an interactive "Suggest SDGs" feature in `admin/publications.php` and `admin/sdg_import.php` that scores a publication's Title, Abstract, and Keywords against `sdg_data.json` and proposes top-2 matching SDGs with match rationales.
-- **SDG-06c (Batch Auto-Classify)**: Provide a one-click batch auto-classification tool for admins to automatically tag unclassified publications using weighted keyword scoring.
-- **SDG-06d (Cross-System Exploration)**: Add deep-dive links from `reports.php` (SDG statistics tab) to the `/msc_sdgs` portal for exploring faculty-wide keyword trend visualizations.
+- [x] **SDG-06a (Dictionary Foundation)**: Integrate `sdg_data.json` from `C:\inetpub\wwwroot\msc_sdgs` (790KB+ curated 17 SDGs dictionary containing keywords, Thai/English names, colors, and relevance weights `rel`) as the core SDG vocabulary. *Done 2026-08-19: bundled as `data/sdg_data.json`, read by `score_publication_sdgs()`.*
+- [x] **SDG-06b (Auto-Suggest on Review)**: Add an interactive "Suggest SDGs" feature in `admin/publications.php` that scores a publication's Title, Abstract, and Keywords against `sdg_data.json` and proposes top-2 matching SDGs with match rationales. *Done 2026-08-19: `admin/suggest_sdgs.php` + UI in `admin/publications.php`, verified end-to-end (real Scopus abstract/keyword fetch → real scoring → admin applies suggestion → normal save). Admin never has values auto-applied without review.*
+- [ ] **SDG-06c (Batch Auto-Classify)**: Provide a one-click batch auto-classification tool for admins to automatically tag unclassified publications using weighted keyword scoring. *Deferred 2026-08-19: 1,883/1,945 publications are unclassified and almost none have real abstract/keyword text yet - a true bulk pass needs a CLI/cron-triggered backfill job (one Scopus API call per publication, rate-limited), not an inline admin-page action. SDG-06b's per-publication flow covers ad-hoc use today.*
+- [ ] **SDG-06d (Cross-System Exploration)**: Add deep-dive links from `reports.php` (SDG statistics tab) to the `/msc_sdgs` portal for exploring faculty-wide keyword trend visualizations. *Deferred 2026-08-19: needs the actual public URL for `msc_sdgs` confirmed by the user first.*
 
 ## Out of Scope
 

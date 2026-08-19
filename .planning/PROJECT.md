@@ -67,6 +67,8 @@
 | `is_active` = toggle ผ่านปุ่มใน admin (ไม่ใช่ hard delete) | ลบนักวิจัยจริงจะ cascade ลบ `researcher_publications` ทำให้ผลงานเก่าหลุดจากสถิติรวมของคณะ ขัดกับ RESEARCHER-05 | ✓ Good |
 | นักวิจัย inactive ซ่อนจากทำเนียบแต่ผลงานเก่ายังนับสถิติรวม | รักษาความถูกต้องของสถิติภาพรวมคณะย้อนหลัง | ✓ Good — verified Phase 3 (2026-08-19) |
 | ผลงานผู้แต่งร่วมหลายภาควิชานับซ้ำได้ทุกภาควิชา, ความร่วมมือหลายประเทศนับเครดิตเต็มทุกประเทศ | ค่าเริ่มต้านที่ให้ภาพรวมความร่วมมือครบถ้วนที่สุด รอยืนยันกับคณะ | — Pending |
+| Phase 6: "Suggest SDGs" เป็นเพียงข้อเสนอแนะที่ admin ต้องกดยืนยันเอง (ใช้เป็น SDG หลัก/รอง แล้วกด Save ตามปกติ) ไม่มีการเขียนทับ sdg_primary/secondary อัตโนมัติ | สอดคล้องกับหลักการเดิมของโปรเจกต์ที่ admin panel ไม่แก้ไขข้อมูลอัตโนมัติโดยไม่ผ่านการตรวจสอบของมนุษย์ (เดิมทีใช้กับ sync, ตอนนี้ขยายมาใช้กับ SDG mapping ด้วย) | ✓ Good — verified 2026-08-19 (real Scopus fetch → score → apply → save, end-to-end) |
+| Phase 6: SDG-06c (batch classify ทั้งหมด) เลื่อนออกไป ไม่ทำเป็น one-click บนหน้า admin | ข้อมูลจริงมี publication ที่ยังไม่จำแนก 1,883 จาก 1,945 รายการ และแทบไม่มีรายการไหนมี abstract/keywords จริงเลย (ต้องเรียก Scopus Abstract Retrieval API ทีละรายการ) — ทำ inline บนหน้าเว็บจะชนปัญหา IIS FastCGI timeout เดียวกับที่เอกสาร stack ของโปรเจกต์เองเคยเตือนไว้สำหรับ sync engine ต้องทำเป็น CLI/cron job แยกต่างหาก | — Pending (deferred, ไม่ใช่ blocker ของ Phase 6) |
 | gitignore `sso_integration_guide.md` ตั้งแต่เริ่มโปรเจกต์ | เอกสารมี Developer Bypass credential ฝังอยู่ หลุดจะกระทบทุกระบบที่เชื่อม MEDSCI ACC | ✓ Good |
 
 ## Evolution

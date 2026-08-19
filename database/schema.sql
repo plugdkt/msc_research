@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS `publications` (
     `source_id` VARCHAR(100) NULL,
     `url` VARCHAR(255) NULL,
     `abstract` TEXT NULL,
+    `keywords` TEXT NULL, -- Phase 6: author keywords from Scopus Abstract Retrieval API, for SDG keyword matching
     `sdg_primary` VARCHAR(50) NULL,
     `sdg_secondary` VARCHAR(50) NULL,
     `sdg_rationale` TEXT NULL,

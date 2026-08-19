@@ -316,7 +316,7 @@ try {
                 <div style="display: flex; gap: 15px;">
                     <div style="flex: 1;">
                         <label style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 5px;">SDG หลัก (Primary SDG)</label>
-                        <select name="sdg_primary" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
+                        <select name="sdg_primary" id="sdg_primary_select" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
                             <option value="">— ไม่ระบุ —</option>
                             <?php foreach (get_all_sdgs() as $code => $details): ?>
                                 <option value="<?php echo $code; ?>" <?php echo (($edit_pub['sdg_primary'] ?? '') === $code) ? 'selected' : ''; ?>>
@@ -327,7 +327,7 @@ try {
                     </div>
                     <div style="flex: 1;">
                         <label style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 5px;">SDG รอง (Secondary SDG)</label>
-                        <select name="sdg_secondary" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
+                        <select name="sdg_secondary" id="sdg_secondary_select" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
                             <option value="">— ไม่ระบุ —</option>
                             <?php foreach (get_all_sdgs() as $code => $details): ?>
                                 <option value="<?php echo $code; ?>" <?php echo (($edit_pub['sdg_secondary'] ?? '') === $code) ? 'selected' : ''; ?>>
@@ -340,7 +340,18 @@ try {
 
                 <div>
                     <label style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 5px;">เหตุผล/เกณฑ์ที่ใช้ประเมิน SDGs</label>
-                    <textarea name="sdg_rationale" class="search-input" rows="2" style="padding: 8px 12px; font-family: inherit; height: auto;" placeholder="ระบุเหตุผลเกณฑ์ประกอบตัวอย่าง: วัณโรค = โรคติดต่อ ตรงกับ target 3.3"><?php echo htmlspecialchars($edit_pub['sdg_rationale'] ?? ''); ?></textarea>
+                    <textarea name="sdg_rationale" id="sdg_rationale_input" class="search-input" rows="2" style="padding: 8px 12px; font-family: inherit; height: auto;" placeholder="ระบุเหตุผลเกณฑ์ประกอบตัวอย่าง: วัณโรค = โรคติดต่อ ตรงกับ target 3.3"><?php echo htmlspecialchars($edit_pub['sdg_rationale'] ?? ''); ?></textarea>
+                </div>
+
+                <div style="background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 10px; padding: 14px;">
+                    <button type="button" id="suggest-sdg-btn" class="btn-premium" style="padding: 8px 14px; font-size: 0.85rem;" data-pub-id="<?php echo (int)$edit_pub['id']; ?>">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> แนะนำ SDG จากคำสำคัญ (Suggest SDGs)
+                    </button>
+                    <small style="color: var(--color-text-muted); display: block; margin-top: 6px;">
+                        ระบบจะจับคู่ชื่อเรื่อง/คำสำคัญ/บทคัดย่อกับพจนานุกรมคำสำคัญ SDG ของคณะ (msc_sdgs) เป็นเพียง <strong>ข้อเสนอแนะ</strong> เท่านั้น — กรุณาตรวจสอบก่อนกดปุ่ม "ใช้ค่านี้" แล้วบันทึกข้อมูลตามปกติ
+                    </small>
+                    <div id="suggest-sdg-status" style="font-size: 0.82rem; margin-top: 8px;"></div>
+                    <div id="suggest-sdg-results" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
 
                 <div>
@@ -508,6 +519,80 @@ try {
         </table>
     </div>
 </div>
+
+<?php if ($edit_mode && $edit_pub): ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('suggest-sdg-btn');
+    if (!btn) return;
+    const statusEl = document.getElementById('suggest-sdg-status');
+    const resultsEl = document.getElementById('suggest-sdg-results');
+    const primarySelect = document.getElementById('sdg_primary_select');
+    const secondarySelect = document.getElementById('sdg_secondary_select');
+    const rationaleInput = document.getElementById('sdg_rationale_input');
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function renderSuggestions(data) {
+        resultsEl.innerHTML = '';
+        if (data.warning) {
+            statusEl.innerHTML = '<span style="color:#f59e0b;"><i class="fa-solid fa-triangle-exclamation"></i> ' + escapeHtml(data.warning) + '</span>';
+        }
+        if (!data.suggestions || data.suggestions.length === 0) {
+            statusEl.innerHTML += '<div style="color: var(--color-text-muted); margin-top: 4px;">ไม่พบคำสำคัญที่ตรงกับ SDG ใดเลย (อาจเป็นเพราะยังไม่มีบทคัดย่อ/คำสำคัญของผลงานนี้)</div>';
+            return;
+        }
+        data.suggestions.forEach((s, idx) => {
+            const div = document.createElement('div');
+            div.style.cssText = 'border: 1px solid ' + s.color + '55; background:' + s.color + '15; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;';
+            div.innerHTML =
+                '<div>' +
+                    '<div style="font-weight: 600; color: ' + s.color + ';">' + escapeHtml(s.code) + ': ' + escapeHtml(s.name_th) + '</div>' +
+                    '<div style="font-size: 0.78rem; color: var(--color-text-muted); margin-top: 2px;">คะแนน: ' + s.score.toFixed(2) + (s.rationale ? ' — จับคู่กับ: ' + escapeHtml(s.rationale) : '') + '</div>' +
+                '</div>' +
+                '<div style="display:flex; gap:6px;">' +
+                    '<button type="button" class="btn-premium apply-sdg-btn" data-slot="primary" data-idx="' + idx + '" style="padding: 5px 10px; font-size: 0.78rem;">ใช้เป็น SDG หลัก</button>' +
+                    '<button type="button" class="btn-premium apply-sdg-btn" data-slot="secondary" data-idx="' + idx + '" style="padding: 5px 10px; font-size: 0.78rem; background: rgba(255,255,255,0.05);">ใช้เป็น SDG รอง</button>' +
+                '</div>';
+            resultsEl.appendChild(div);
+        });
+
+        resultsEl.querySelectorAll('.apply-sdg-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                const s = data.suggestions[parseInt(b.dataset.idx, 10)];
+                const select = b.dataset.slot === 'primary' ? primarySelect : secondarySelect;
+                select.value = s.code;
+                if (rationaleInput.value.trim() === '') {
+                    rationaleInput.value = s.rationale ? (s.code + ': ' + s.rationale) : ('แนะนำโดยระบบจากคำสำคัญ (' + s.code + ')');
+                }
+            });
+        });
+    }
+
+    btn.addEventListener('click', () => {
+        btn.disabled = true;
+        statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังวิเคราะห์...';
+        resultsEl.innerHTML = '';
+        fetch('suggest_sdgs.php?id=' + encodeURIComponent(btn.dataset.pubId))
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    statusEl.innerHTML = '<span style="color:#f87171;">' + escapeHtml(data.error) + '</span>';
+                    return;
+                }
+                statusEl.innerHTML = '';
+                renderSuggestions(data);
+            })
+            .catch(() => {
+                statusEl.innerHTML = '<span style="color:#f87171;">เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่</span>';
+            })
+            .finally(() => { btn.disabled = false; });
+    });
+});
+</script>
+<?php endif; ?>
 
 <?php
 require_once __DIR__ . '/admin_footer.php';
