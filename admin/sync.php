@@ -33,13 +33,24 @@ if ($is_cli || $is_cron_token) {
 }
 
 // --- Everything below this line requires an authenticated admin session ---
-// (admin_header.php is expected to enforce login; sync.php performs no
-// privileged action before that include is reached.)
-
-$current_page = 'admin_sync';
-$page_title = 'ซิงค์ข้อมูลผ่าน API - Admin Panel';
-
-require_once __DIR__ . '/admin_header.php';
+//
+// SECURITY: this explicit check (matching admin_header.php's own check)
+// runs BEFORE any sync is triggered and before any HTML output, for two
+// reasons:
+// 1. ADMIN-05: no privileged action may run without it - relying solely on
+//    admin_header.php further down was exactly the bug found and fixed in
+//    admin/researchers.php (an unauthenticated request executed every
+//    action handler before that include was ever reached).
+// 2. ADMIN-03: an already-running sync must reject with HTTP 409, which is
+//    only possible before admin_header.php prints the page's HTML - PHP
+//    can't change the status code once output has started.
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: login.php');
+    exit;
+}
 
 // ADMIN-04: every sync trigger records who triggered it in sync_log.triggered_by.
 $current_admin = $_SESSION['admin_username'] ?? 'unknown-admin';
@@ -48,15 +59,6 @@ $sync_logs = [];
 $sync_summary = null;
 $sync_triggered = false;
 $sync_type = 'individual';
-
-// Get list of all researchers for the dropdown menu
-$all_researchers_list = [];
-try {
-    $stmt = $pdo->query("SELECT id, title_th, first_name_th, last_name_th FROM `researchers` ORDER BY first_name_th ASC");
-    $all_researchers_list = $stmt->fetchAll();
-} catch (PDOException $e) {
-    error_log("Failed to fetch researchers list for dropdown: " . $e->getMessage());
-}
 
 if (isset($_GET['id'])) {
     $sync_triggered = true;
@@ -81,6 +83,27 @@ if (isset($_POST['trigger_individual_sync'])) {
     $sync_result = run_synchronization($pdo, false, $target_id, $current_admin);
     $sync_logs = $sync_result['logs'];
     $sync_summary = $sync_result['summary'];
+}
+
+// ADMIN-03 / SPEC.md §8: a rejected-because-already-running trigger responds
+// with 409 Conflict, matching the documented API contract. Must happen
+// before admin_header.php prints any HTML.
+if (!empty($sync_summary['rejected_already_running'])) {
+    http_response_code(409);
+}
+
+$current_page = 'admin_sync';
+$page_title = 'ซิงค์ข้อมูลผ่าน API - Admin Panel';
+
+require_once __DIR__ . '/admin_header.php';
+
+// Get list of all researchers for the dropdown menu
+$all_researchers_list = [];
+try {
+    $stmt = $pdo->query("SELECT id, title_th, first_name_th, last_name_th FROM `researchers` ORDER BY first_name_th ASC");
+    $all_researchers_list = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log("Failed to fetch researchers list for dropdown: " . $e->getMessage());
 }
 
 // --- Orphan cleanup (admin-triggered only, see cleanup_orphaned_publications() in functions.php) ---
@@ -147,6 +170,47 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
     // Delay (seconds) between researchers to stay well under Scopus rate limits.
     // Note: PHP does not allow `const` inside a function body, so a plain variable is used.
     $inter_researcher_delay_seconds = 1;
+
+    // ADMIN-03: reject a sync trigger while another is already running,
+    // rather than letting two syncs race against the same publications.
+    // A 'running' row older than this is treated as an abandoned/crashed
+    // sync (e.g. the PHP process was killed mid-run) rather than a real
+    // lock, so a stuck row can't jam every future sync forever.
+    $stale_after_minutes = 30;
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, started_at FROM `sync_log`
+            WHERE status = 'running' AND started_at > (NOW() - INTERVAL :mins MINUTE)
+            ORDER BY started_at DESC LIMIT 1
+        ");
+        $stmt->execute([':mins' => $stale_after_minutes]);
+        $already_running = $stmt->fetch();
+
+        if ($already_running) {
+            $msg = "มีการซิงค์กำลังทำงานอยู่ (เริ่มเมื่อ " . format_thai_datetime($already_running['started_at']) . ") กรุณารอให้เสร็จก่อน";
+            if ($quiet) {
+                echo $msg . "\n";
+            }
+            return ['logs' => [["researcher" => "-", "details" => [$msg], "has_error" => true]], 'summary' => [
+                'researchers_processed' => 0, 'publications_synced' => 0,
+                'records_skipped' => 0, 'duplicate_scopus_ids_found' => 0,
+                'rejected_already_running' => true,
+            ]];
+        }
+
+        // No active lock found - any 'running' row still around is stale.
+        // Close it out so it stops shadowing the check above and doesn't
+        // confuse an admin reading sync_log history later.
+        $pdo->exec("
+            UPDATE `sync_log` SET status = 'failed', completed_at = NOW(),
+                error_message = 'ซิงค์ครั้งก่อนไม่จบตามปกติ (อาจถูกยกเลิกกลางคัน) ระบบปิดสถานะอัตโนมัติ'
+            WHERE status = 'running'
+        ");
+    } catch (PDOException $e) {
+        // sync_log may not exist yet on a pre-migration database - don't
+        // let the mutex check itself block the sync.
+        error_log("[sync] failed to check for an in-progress sync: " . $e->getMessage());
+    }
 
     $sync_log_id = null;
     try {

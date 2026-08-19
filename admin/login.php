@@ -267,7 +267,7 @@ if (isset($_POST['login'])) {
         <?php if ($error): ?>
             <div class="error-message">
                 <i class="fa-solid fa-circle-exclamation"></i>
-                <span><?php echo $error; ?></span>
+                <span><?php echo htmlspecialchars($error); ?></span>
             </div>
         <?php endif; ?>
 
