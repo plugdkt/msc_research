@@ -3,6 +3,8 @@ sso_integration_guide.md
 .env.*
 config.php
 *.local.php
+*.pem
+*.crt
 *.docx
 ~$*
 .planning/research/.cache/

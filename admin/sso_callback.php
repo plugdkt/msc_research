@@ -30,11 +30,20 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
 // what proves a token really came from MEDSCI ACC - verifying it off by
 // default lets anyone on the network path forge a verify response and log
 // in as any user. SSO_SSL_VERIFY exists only as an explicit, deliberate
-// escape hatch (e.g. a genuinely broken internal CA chain on this specific
-// server) - set it in config/secrets.local.php only if you understand that
-// tradeoff, and prefer fixing the real cause instead: point curl.cainfo in
-// php.ini at an up-to-date cacert.pem bundle rather than disabling
-// verification.
+// escape hatch.
+// Auto-detect local CA bundle for Windows environments
+$ca_candidates = [
+    defined('CURL_CA_BUNDLE') ? CURL_CA_BUNDLE : '',
+    __DIR__ . '/../config/cacert.pem',
+    'C:\\xampp\\php\\extras\\ssl\\cacert.pem'
+];
+foreach ($ca_candidates as $ca_file) {
+    if (!empty($ca_file) && file_exists($ca_file)) {
+        curl_setopt($ch, CURLOPT_CAINFO, $ca_file);
+        break;
+    }
+}
+
 $ssl_verify = defined('SSO_SSL_VERIFY') ? (bool)SSO_SSL_VERIFY : true;
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $ssl_verify);
 curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $ssl_verify ? 2 : 0);
