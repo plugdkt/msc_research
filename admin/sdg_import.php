@@ -299,24 +299,23 @@ if (isset($_POST['upload_csv'])) {
         </div>
         <div style="background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); padding: 14px; border-radius: 10px; text-align: center;">
             <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่จำแนก SDG แล้ว</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #10b981; font-family: var(--font-eng);"><?php echo number_format($classified_pubs); ?></div>
+            <div id="kpi-classified-pubs" style="font-size: 1.5rem; font-weight: 700; color: #10b981; font-family: var(--font-eng);"><?php echo number_format($classified_pubs); ?></div>
         </div>
         <div style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); padding: 14px; border-radius: 10px; text-align: center;">
             <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่ยังไม่จำแนก</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #f87171; font-family: var(--font-eng);"><?php echo number_format($unclassified_pubs); ?></div>
+            <div id="kpi-unclassified-pubs" style="font-size: 1.5rem; font-weight: 700; color: #f87171; font-family: var(--font-eng);"><?php echo number_format($unclassified_pubs); ?></div>
         </div>
     </div>
 
     <!-- Auto-Classify All -->
-    <div style="background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 10px; padding: 16px; margin-bottom: 25px;">
+    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 16px 18px; border-radius: 10px; margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div>
-                <h4 style="margin: 0 0 4px 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-bolt" style="color: var(--color-primary);"></i>
-                    Auto-Classify All (จัดกลุ่ม SDG อัตโนมัติทั้งระบบ)
-                </h4>
-                <p style="margin: 0; font-size: 0.82rem; color: var(--color-text-muted);">
-                    กวาดตรวจผลงานที่ยัง Unclassified ทั้งหมด (<?php echo number_format($unclassified_pubs); ?> เรื่อง) ดึงบทคัดย่อ/คำสำคัญจาก Scopus แล้วจับคู่กับพจนานุกรม
+                <div style="font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--color-accent);"></i>
+                    <span>Auto-Classify All (จัดกลุ่ม SDG อัตโนมัติทั้งคณะ)</span>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 4px 0 0 0; line-height: 1.4;">
                     <strong>เขียน SDG หลัก/รองอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (≥ <span id="min-score-label">1.0</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
                 </p>
             </div>
@@ -344,7 +343,22 @@ if (isset($_POST['upload_csv'])) {
                 <div style="text-align:center; font-size:0.78rem;"><div style="font-weight:700; color:#94a3b8;" id="auto-classify-skipped-count">0</div>มีอยู่แล้ว (ข้าม)</div>
                 <div style="text-align:center; font-size:0.78rem;"><div style="font-weight:700; color:#f87171;" id="auto-classify-error-count">0</div>ผิดพลาด</div>
             </div>
-            <div id="auto-classify-log" style="margin-top: 12px; max-height: 160px; overflow-y: auto; font-size: 0.75rem; color: var(--color-text-muted); background: rgba(0,0,0,0.15); border-radius: 8px; padding: 10px; display: flex; flex-direction: column-reverse; gap: 4px;"></div>
+
+            <!-- Summary Report Box after completion -->
+            <div id="auto-classify-summary-box" style="display:none; margin-top:15px; padding:15px; border-radius:10px; background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.3);">
+                <div style="font-weight:600; font-size:0.95rem; color:#10b981; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span id="auto-classify-summary-title">ประมวลผล Auto-Classify เสร็จสิ้นเรียบร้อย!</span>
+                </div>
+                <div id="auto-classify-summary-details" style="font-size:0.85rem; line-height:1.6; color:var(--color-text-main);"></div>
+                <div style="margin-top:12px; display:flex; gap:10px;">
+                    <button type="button" class="btn-premium" onclick="window.location.reload();" style="padding:6px 14px; font-size:0.8rem;">
+                        <i class="fa-solid fa-rotate-right"></i> รีเฟรชหน้าเพื่อดูสถิติใหม่
+                    </button>
+                </div>
+            </div>
+
+            <div id="auto-classify-log" style="margin-top: 12px; max-height: 180px; overflow-y: auto; font-size: 0.75rem; color: var(--color-text-muted); background: rgba(0,0,0,0.15); border-radius: 8px; padding: 10px; display: flex; flex-direction: column-reverse; gap: 4px;"></div>
         </div>
     </div>
 
@@ -584,12 +598,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        statusText.textContent = stopRequested ? 'หยุดแล้ว' : 'เสร็จสิ้น';
+        statusText.textContent = stopRequested ? 'หยุดกระบวนการแล้ว' : 'ประมวลผลเสร็จสิ้นสมบูรณ์';
         stopBtn.style.display = 'none';
         startBtn.style.display = 'inline-flex';
-        // Refresh so the dictionary status panel's classified/unclassified
-        // counts reflect what this run just wrote.
-        setTimeout(() => { window.location.reload(); }, 1500);
+        startBtn.disabled = false;
+
+        // Dynamic update KPI numbers without page refresh
+        const kpiClassified = document.getElementById('kpi-classified-pubs');
+        const kpiUnclassified = document.getElementById('kpi-unclassified-pubs');
+        if (kpiClassified && kpiUnclassified) {
+            let currentClassified = parseInt(kpiClassified.textContent.replace(/,/g, ''), 10) || 0;
+            let currentUnclassified = parseInt(kpiUnclassified.textContent.replace(/,/g, ''), 10) || 0;
+            let newlyClassified = counts.applied || 0;
+            kpiClassified.textContent = (currentClassified + newlyClassified).toLocaleString();
+            kpiUnclassified.textContent = Math.max(0, currentUnclassified - newlyClassified).toLocaleString();
+        }
+
+        // Show Summary Report Box
+        const summaryBox = document.getElementById('auto-classify-summary-box');
+        const summaryTitle = document.getElementById('auto-classify-summary-title');
+        const summaryDetails = document.getElementById('auto-classify-summary-details');
+        if (summaryBox && summaryDetails) {
+            summaryBox.style.display = 'block';
+            summaryTitle.innerHTML = stopRequested 
+                ? '<i class="fa-solid fa-circle-exclamation" style="color:#f59e0b;"></i> <span style="color:#f59e0b;">หยุดการทำงานชั่วคราว</span>' 
+                : '<i class="fa-solid fa-circle-check" style="color:#10b981;"></i> <span>ประมวลผล Auto-Classify เสร็จสิ้นเรียบร้อย!</span>';
+            
+            summaryDetails.innerHTML = `
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:8px;">
+                    <div>• <strong>จัดกลุ่ม SDG สำเร็จ:</strong> <span style="color:#10b981; font-weight:700;">${counts.applied.toLocaleString()}</span> เรื่อง</div>
+                    <div>• <strong>คะแนนต่ำกว่าเกณฑ์ (ข้าม):</strong> <span style="color:#f59e0b; font-weight:700;">${counts.low_confidence.toLocaleString()}</span> เรื่อง</div>
+                    <div>• <strong>มี SDG เดิมอยู่แล้ว (ข้าม):</strong> <span style="color:#94a3b8; font-weight:700;">${counts.skipped.toLocaleString()}</span> เรื่อง</div>
+                    <div>• <strong>ข้อผิดพลาด/ไม่พบ:</strong> <span style="color:#f87171; font-weight:700;">${counts.error.toLocaleString()}</span> เรื่อง</div>
+                </div>
+                <div style="margin-top:8px; font-size:0.8rem; color:var(--color-text-muted);">
+                    <em>* ข้อมูลที่จัดกลุ่มสำเร็จได้รับการบันทึกลงฐานข้อมูลและอัปเดตไปยังหน้า Dashboard / Reports เรียบร้อยแล้ว สามารถดูประวัติการจับคู่แต่ละรายการได้จากกล่องประวัติสีดำด้านล่าง</em>
+                </div>
+            `;
+        }
     });
 
     stopBtn.addEventListener('click', () => {
