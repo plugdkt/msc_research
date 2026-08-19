@@ -307,6 +307,47 @@ if (isset($_POST['upload_csv'])) {
         </div>
     </div>
 
+    <!-- Auto-Classify All -->
+    <div style="background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 10px; padding: 16px; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h4 style="margin: 0 0 4px 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-bolt" style="color: var(--color-primary);"></i>
+                    Auto-Classify All (จัดกลุ่ม SDG อัตโนมัติทั้งระบบ)
+                </h4>
+                <p style="margin: 0; font-size: 0.82rem; color: var(--color-text-muted);">
+                    กวาดตรวจผลงานที่ยัง Unclassified ทั้งหมด (<?php echo number_format($unclassified_pubs); ?> เรื่อง) ดึงบทคัดย่อ/คำสำคัญจาก Scopus แล้วจับคู่กับพจนานุกรม
+                    <strong>เขียน SDG หลัก/รองอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (≥ <span id="min-score-label">0.4</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
+                </p>
+            </div>
+            <div style="display:flex; gap:8px; flex-shrink:0;">
+                <button type="button" id="auto-classify-start-btn" class="btn-premium" style="padding: 10px 18px;" <?php echo $unclassified_pubs === 0 ? 'disabled' : ''; ?>>
+                    <i class="fa-solid fa-play"></i> เริ่ม Auto-Classify
+                </button>
+                <button type="button" id="auto-classify-stop-btn" class="btn-premium" style="padding: 10px 18px; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #f87171; display: none;">
+                    <i class="fa-solid fa-stop"></i> หยุด
+                </button>
+            </div>
+        </div>
+
+        <div id="auto-classify-progress" style="display: none; margin-top: 18px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 6px;">
+                <span id="auto-classify-status-text">กำลังเริ่มต้น...</span>
+                <span id="auto-classify-counter">0 / 0</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; height: 10px; overflow: hidden;">
+                <div id="auto-classify-bar" style="background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); height: 100%; width: 0%; transition: width 0.2s ease;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px;">
+                <div style="text-align:center; font-size:0.78rem;"><div style="font-weight:700; color:#10b981;" id="auto-classify-applied-count">0</div>จำแนกสำเร็จ</div>
+                <div style="text-align:center; font-size:0.78rem;"><div style="font-weight:700; color:#f59e0b;" id="auto-classify-lowconf-count">0</div>คะแนนต่ำ (ข้าม)</div>
+                <div style="text-align:center; font-size:0.78rem;"><div style="font-weight:700; color:#94a3b8;" id="auto-classify-skipped-count">0</div>มีอยู่แล้ว (ข้าม)</div>
+                <div style="text-align:center; font-size:0.78rem;"><div style="font-weight:700; color:#f87171;" id="auto-classify-error-count">0</div>ผิดพลาด</div>
+            </div>
+            <div id="auto-classify-log" style="margin-top: 12px; max-height: 160px; overflow-y: auto; font-size: 0.75rem; color: var(--color-text-muted); background: rgba(0,0,0,0.15); border-radius: 8px; padding: 10px; display: flex; flex-direction: column-reverse; gap: 4px;"></div>
+        </div>
+    </div>
+
     <?php if (!empty($dict_info['data'])): ?>
     <details>
         <summary style="cursor: pointer; font-size: 0.85rem; color: var(--color-text-muted); font-weight: 500; margin-bottom: 10px;">
@@ -439,6 +480,124 @@ if (isset($_POST['upload_csv'])) {
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const startBtn = document.getElementById('auto-classify-start-btn');
+    const stopBtn = document.getElementById('auto-classify-stop-btn');
+    if (!startBtn) return;
+
+    const progressEl = document.getElementById('auto-classify-progress');
+    const statusText = document.getElementById('auto-classify-status-text');
+    const counterEl = document.getElementById('auto-classify-counter');
+    const barEl = document.getElementById('auto-classify-bar');
+    const logEl = document.getElementById('auto-classify-log');
+    const countEls = {
+        applied: document.getElementById('auto-classify-applied-count'),
+        low_confidence: document.getElementById('auto-classify-lowconf-count'),
+        skipped: document.getElementById('auto-classify-skipped-count'),
+        error: document.getElementById('auto-classify-error-count'),
+    };
+
+    let stopRequested = false;
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function log(text, color) {
+        const div = document.createElement('div');
+        if (color) div.style.color = color;
+        div.textContent = text;
+        logEl.prepend(div);
+    }
+
+    startBtn.addEventListener('click', async () => {
+        const totalUnclassified = <?php echo (int)$unclassified_pubs; ?>;
+        if (!confirm('ระบบจะดึงบทคัดย่อ/คำสำคัญและเขียน SDG หลัก/รองอัตโนมัติให้กับผลงานที่ยัง Unclassified ทั้งหมด (' + totalUnclassified.toLocaleString() + ' เรื่อง โดยประมาณ) เฉพาะรายการที่คะแนนมั่นใจเพียงพอ - การกระทำนี้เขียนข้อมูลจริงลงฐานข้อมูลทันทีต่อรายการ (ไม่ใช่แค่ตัวอย่าง) ยืนยันที่จะเริ่มหรือไม่?')) {
+            return;
+        }
+
+        stopRequested = false;
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-flex';
+        progressEl.style.display = 'block';
+        counterEl.textContent = '0 / 0';
+        barEl.style.width = '0%';
+        logEl.innerHTML = '';
+        Object.values(countEls).forEach(el => el.textContent = '0');
+        const counts = { applied: 0, low_confidence: 0, skipped: 0, error: 0 };
+
+        statusText.textContent = 'กำลังดึงรายชื่อผลงานที่ยัง Unclassified...';
+        let items;
+        try {
+            const listResp = await fetch('auto_classify_sdgs.php?action=list');
+            const listData = await listResp.json();
+            if (listData.error) {
+                statusText.textContent = 'เกิดข้อผิดพลาด: ' + listData.error;
+                startBtn.style.display = 'inline-flex';
+                stopBtn.style.display = 'none';
+                return;
+            }
+            items = listData.items;
+            if (listData.min_score !== undefined) {
+                document.getElementById('min-score-label').textContent = listData.min_score;
+            }
+        } catch (e) {
+            statusText.textContent = 'เชื่อมต่อไม่สำเร็จ กรุณาลองใหม่';
+            startBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+            return;
+        }
+
+        const total = items.length;
+        for (let i = 0; i < total; i++) {
+            if (stopRequested) {
+                log('--- หยุดโดยผู้ใช้ ---', '#f59e0b');
+                break;
+            }
+            const item = items[i];
+            counterEl.textContent = (i + 1) + ' / ' + total;
+            barEl.style.width = Math.round(((i + 1) / total) * 100) + '%';
+            statusText.textContent = 'กำลังประมวลผล: ' + (item.title || ('#' + item.id));
+
+            try {
+                const resp = await fetch('auto_classify_sdgs.php?action=process&id=' + encodeURIComponent(item.id));
+                const data = await resp.json();
+                const status = data.status || 'error';
+                counts[status] = (counts[status] || 0) + 1;
+                if (countEls[status]) countEls[status].textContent = counts[status];
+
+                if (status === 'applied') {
+                    log('✓ #' + item.id + ' → ' + data.sdg_primary + (data.sdg_secondary ? ', ' + data.sdg_secondary : '') + ' (คะแนน ' + data.top_score + ')', '#10b981');
+                } else if (status === 'low_confidence') {
+                    log('… #' + item.id + ' ข้าม: ' + (data.reason || 'คะแนนต่ำ'), '#94a3b8');
+                } else if (status === 'error') {
+                    log('✗ #' + item.id + ' ผิดพลาด: ' + (data.reason || data.error || 'unknown'), '#f87171');
+                } else {
+                    log('- #' + item.id + ' ' + (data.reason || status), '#94a3b8');
+                }
+            } catch (e) {
+                counts.error++;
+                countEls.error.textContent = counts.error;
+                log('✗ #' + item.id + ' เชื่อมต่อไม่สำเร็จ', '#f87171');
+            }
+        }
+
+        statusText.textContent = stopRequested ? 'หยุดแล้ว' : 'เสร็จสิ้น';
+        stopBtn.style.display = 'none';
+        startBtn.style.display = 'inline-flex';
+        // Refresh so the dictionary status panel's classified/unclassified
+        // counts reflect what this run just wrote.
+        setTimeout(() => { window.location.reload(); }, 1500);
+    });
+
+    stopBtn.addEventListener('click', () => {
+        stopRequested = true;
+        statusText.textContent = 'กำลังหยุด...';
+    });
+});
+</script>
 
 <?php
 require_once __DIR__ . '/admin_footer.php';
