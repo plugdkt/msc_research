@@ -939,6 +939,13 @@ function format_thai_datetime($datetime) {
 function get_sdg_badge_details($sdg_code) {
     if (empty($sdg_code)) return null;
     $sdg_code = trim(strtoupper($sdg_code));
+
+    // SDG-03/REPORT-06: publications with no SDG match are their own
+    // reportable category, not just absent from every SDG's count.
+    if ($sdg_code === 'UNCLASSIFIED') {
+        return ['name' => 'Unclassified', 'th_name' => 'ยังไม่จำแนก SDG', 'color' => '#64748b'];
+    }
+
     $num = (int)preg_replace('/[^0-9]/', '', $sdg_code);
     
     $sdgs = [

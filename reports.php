@@ -469,11 +469,16 @@ uksort($funding_groups, function($a, $b) use ($funding_groups) {
     return count($funding_groups[$b]['publications']) <=> count($funding_groups[$a]['publications']);
 });
 
-// Group publications by SDG (always show SDG 1 - SDG 17, and count in both primary and secondary if a paper has both)
+// Group publications by SDG (always show SDG 1 - SDG 17, and count in both
+// primary and secondary if a paper has both). SDG-03/REPORT-06: a
+// publication matching none of them is its own "Unclassified" bucket,
+// not just missing from every count - it's the majority of the data
+// (~91%) as of 2026-08-19, so it needs to be visible, not silently absent.
 $sdg_groups = [];
 for ($i = 1; $i <= 17; $i++) {
     $sdg_groups["SDG " . $i] = [];
 }
+$sdg_groups['Unclassified'] = [];
 
 foreach ($filtered_publications as $pub) {
     $sdgs = [];
@@ -483,14 +488,19 @@ foreach ($filtered_publications as $pub) {
     if (!empty($pub['sdg_secondary'])) {
         $sdgs[] = trim($pub['sdg_secondary']);
     }
-    
+
     $sdgs = array_unique($sdgs);
+    $matched_any = false;
     foreach ($sdgs as $sdg) {
         $num = (int)preg_replace('/[^0-9]/', '', $sdg);
         if ($num >= 1 && $num <= 17) {
             $sdg_key = "SDG " . $num;
             $sdg_groups[$sdg_key][] = $pub;
+            $matched_any = true;
         }
+    }
+    if (!$matched_any) {
+        $sdg_groups['Unclassified'][] = $pub;
     }
 }
 
@@ -1522,7 +1532,11 @@ include_once __DIR__ . '/includes/header.php';
             ?>
                 <div class="glass-panel sdg-card <?php echo $active_class; ?>" onclick="selectSdgFilter('<?php echo htmlspecialchars($sdg_code); ?>', '<?php echo $clean_id; ?>')" id="sdg-card-<?php echo $clean_id; ?>" style="padding: 20px 15px; text-align: center; cursor: pointer; border-bottom: 4px solid <?php echo $sdg_color; ?>; transition: var(--transition-smooth); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px;">
                     <div style="width: 36px; height: 36px; border-radius: 6px; background: <?php echo $sdg_color; ?>; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-family: var(--font-eng); font-size: 1.1rem; box-shadow: 0 4px 10px <?php echo $sdg_color; ?>44; flex-shrink: 0;">
-                        <?php echo (int)preg_replace('/[^0-9]/', '', $sdg_code); ?>
+                        <?php if ($sdg_code === 'Unclassified'): ?>
+                            <i class="fa-solid fa-question" style="font-size: 0.95rem;"></i>
+                        <?php else: ?>
+                            <?php echo (int)preg_replace('/[^0-9]/', '', $sdg_code); ?>
+                        <?php endif; ?>
                     </div>
                     <div style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-main); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; height: 2.6em;">
                         <?php echo htmlspecialchars($sdg_th_name ?: $sdg_code); ?>
