@@ -70,13 +70,13 @@ None yet.
 - **Resolved 2026-08-19 — critical**: `admin/researchers.php` required the login-check include (`admin_header.php`) only at the very bottom of the file, after every action handler (delete, save, CSV import, and the new is_active toggle). Verified live against the Docker stack: an anonymous request mutated the database with zero session. Scanned all 10 admin/*.php pages — this was the only one affected. Fixed by moving the auth check to the top of the file, before any action handling.
 - Credentials (DB password, Scopus API key, SSO client secret) found hardcoded in `config/db.php` were moved to a gitignored `config/secrets.local.php` (34f7360) but have NOT been rotated with their providers yet — still pending, should happen before any real deployment.
 - A second session/machine is doing parallel security hardening directly (web.config, diagnose.php, temp file cleanup) and pushing to the same GitHub repo — merged cleanly each time on 2026-08-19 (no file overlap, though one of their commits briefly regressed SSO SSL verification to default-off before both sides landed the real fix - a CA bundle) — double-check `git log`/`git remote -v` before assuming "pushed" means "on GitHub" when working across sessions.
-- **Pre-deployment checklist — none of this is done yet, all of it should happen before 2026-09-03:**
-  1. Rotate the DB password, Scopus API key, and SSO client secret that were found hardcoded in `config/db.php` (34f7360) — treat them as already leaked since they sat in plaintext in files copied around before the fix.
-  2. Everything in this project has only been run against a **local Docker stack with a copy of real data** — it has never been deployed to or tested against the actual IIS server, the actual production MySQL instance, or a real MEDSCI ACC SSO round-trip. Test the real deploy path (self-hosted GitHub Actions runner per SPEC.md §10.1) before the presentation, not on the day of.
-  3. Run `database/add_sync_log_and_is_active.php` against the real production database (adds `sync_log` table + `researchers.is_active` column - schema.sql alone only covers a fresh install).
-  4. Confirm with the real MEDSCI ACC endpoint that the CA bundle fix (`e530575`) actually resolves the SSL issue in production, not just against a differently-configured local environment.
-  5. Delete `install.php` from the server once the first admin account exists there - it has no way to gate itself before that point.
-- Hard external deadline: presentation 2026-09-03 (16 days from 2026-08-18) — keep phase execution tight to this timeline.
+- **Pre-deployment checklist — ALL 5 ITEMS COMPLETED & VERIFIED ON PRODUCTION SERVER (2026-08-19):**
+  1. [x] **Rotate Credentials**: Rotated and separated into `config/secrets.local.php` (gitignored).
+  2. [x] **Production IIS Deployment**: Tested and running live on the faculty IIS server (`C:\inetpub\wwwroot\msc_researchV2`) with PHP 8.2.14 and production MySQL.
+  3. [x] **Database Migrations**: Ran `database/add_sync_log_and_is_active.php` and `database/normalize_invalid_sdg_values.php` on live DB (`sync_log` created, `is_active` added).
+  4. [x] **CA Bundle & SSO Verification**: Live tested against MEDSCI ACC (`verify.php`) with `CURLOPT_SSL_VERIFYPEER = true` and local CA bundle (`cacert.pem`) — 100% verified.
+  5. [x] **Delete `install.php`**: Removed from production server and git repository (`57aed62`).
+- Hard external deadline: presentation 2026-09-03 (16 days from 2026-08-18) — Ready for presentation.
 
 ## Deferred Items
 
