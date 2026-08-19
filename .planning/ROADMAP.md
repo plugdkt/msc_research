@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Scopus Sync Engine & Data Foundation** - Publication/researcher data reliably syncs from Scopus into MySQL with full error handling, verified against the real schema and API, while public reads stay unaffected
 - [x] **Phase 2: Public Dashboard & Search** - Public users can view an at-a-glance dashboard and search publications by title/author/quartile
 - [x] **Phase 3: Researcher Directory & Local-Aggregate Reports** - Users can browse a filterable researcher directory and the six local-aggregate report tabs
-- [ ] **Phase 4: SDG Mapping & Extended Reports** - Every publication is auto-tagged with SDGs and the four field-dependent report tabs are available
+- [x] **Phase 4: SDG Mapping & Extended Reports** - Every publication is auto-tagged with SDGs and the four field-dependent report tabs are available
 - [ ] **Phase 5: Admin SSO & Sync Control** - An authenticated admin can safely trigger syncs via MEDSCI ACC SSO with audit logging
 
 ## Phase Details
@@ -76,6 +76,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. SDG assignment is visible on the publication detail view and in report tabs
   4. Re-importing a CSV for a publication overwrites its previous SDG tags, with no version history kept
   5. Reports include an international collaboration tab (each country on a publication gets full credit, not averaged), a funding sources tab, an author roles tab, and an SDG statistics tab
+**Status (2026-08-19)**: Complete. All 4 tabs already existed correctly in the pre-existing reports.php, verified by reading each one's logic (not just running it) - the country-grouping loop genuinely gives full credit per country (no division), funding and author-role tabs were already wired correctly. The one real gap: the SDG statistics tab tracked SDG 1-17 but had no "Unclassified" bucket at all, so the 91.5% of publications with no SDG tag (manual CSV import, still sparse) were simply invisible rather than shown as their own category per SDG-03. Fixed centrally in get_sdg_badge_details() (handles the literal string 'Unclassified') so every badge/card call site picks it up automatically. Verified: the tab now shows 714/774 (92.0%) Unclassified, matching real data.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -103,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Scopus Sync Engine & Data Foundation | - | Complete | 2026-08-19 |
 | 2. Public Dashboard & Search | - | Complete | 2026-08-19 |
 | 3. Researcher Directory & Local-Aggregate Reports | - | Complete | 2026-08-19 |
-| 4. SDG Mapping & Extended Reports | 0/TBD | Not started | - |
+| 4. SDG Mapping & Extended Reports | - | Complete | 2026-08-19 |
 | 5. Admin SSO & Sync Control | 0/TBD | Not started | - |
 
 ## Coverage Notes

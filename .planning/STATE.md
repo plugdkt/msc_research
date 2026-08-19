@@ -3,10 +3,10 @@ gsd_state_version: '1.0'
 status: in_progress
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 0
   completed_plans: 0
-  percent: 60
+  percent: 80
 ---
 
 # Project State
@@ -16,16 +16,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** ข้อมูลผลงานตีพิมพ์ของคณะที่ซิงค์มาจาก Scopus ต้องถูกต้อง ครบถ้วน และเข้าถึงได้แบบสาธารณะตลอดเวลา แม้ระหว่างที่กำลังซิงค์ข้อมูลอยู่ก็ตาม
-**Current focus:** Phase 4 — SDG Mapping & Extended Reports
+**Current focus:** Phase 5 — Admin SSO & Sync Control
 
 ## Current Position
 
-Phase: 4 of 5 (SDG Mapping & Extended Reports)
+Phase: 5 of 5 (Admin SSO & Sync Control)
 Plan: 0 of TBD in current phase
-Status: Phases 1-3 complete and verified against real production data (776 publications, 97 researchers, via local Docker stack)
-Last activity: 2026-08-19 — Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) implemented, tested, and pushed; merged with parallel server-side security work (web.config, diagnose.php, temp file cleanup, no conflicts)
+Status: Phases 1-4 complete and verified against real production data (776 publications, 97 researchers, via local Docker stack). This is the last phase.
+Last activity: 2026-08-19 — Phase 4 (SDG-01..05, REPORT-03..06) implemented, tested, and pushed; the one real gap (SDG statistics tab missing an Unclassified bucket) is fixed
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -85,5 +85,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-19
-Stopped at: Phases 1-3 implemented, tested against real production data via local Docker stack, and pushed to master (merged with parallel server-side security commits along the way). SDG schema decision made (keep 2-column design, SDG-07 deferred to v2) and admin/sdg_import.php's multi-value-cell handling fixed accordingly. Next: Phase 4 proper (SDG statistics tab plus REPORT-03/04/05 - international collaboration, funding sources, author roles) - no longer blocked on a schema decision.
+Stopped at: Phases 1-4 implemented, tested against real production data via local Docker stack, and pushed to master (merged with parallel server-side security commits along the way, including catching and fixing a real security regression - SSO_SSL_VERIFY defaulting to false - introduced by that parallel session, since properly fixed on both sides with a real CA bundle). Next: Phase 5, the last one (ADMIN-01..05 - MEDSCI ACC SSO login, sync trigger, sync lock/mutex, audit log triggered_by). Note: admin/sso_callback.php, admin/login.php, and the sync-trigger flow have already been touched extensively by both this session and the parallel server session for security fixes - read the current state of those files carefully before assuming what's left to build vs. already done.
 Resume file: None

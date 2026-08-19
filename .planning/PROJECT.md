@@ -18,12 +18,12 @@
 - [x] ทำเนียบนักวิจัย กรองตามภาควิชา/ประเภทบุคลากร เรียงตามผลงาน/citations/h-index (default descending, toggle ascending ได้) พร้อม pagination — Phase 3, เขียนใหม่จาก client-side filter (ใช้ pagination จริงไม่ได้) เป็น server-side filter+sort+paginate (2026-08-19)
 - [x] รายงานสรุปวิเคราะห์ — ส่วน local-aggregate (แนวโน้ม, แยกภาควิชา, quartiles, จัดอันดับนักวิจัย, สถิติรายปี, sources) — Phase 3, ของเดิมถูกต้องอยู่แล้ว ตรวจสอบ query แยกภาควิชาแล้วว่านับผลงานผู้แต่งร่วมหลายภาควิชาซ้ำได้ถูกต้องจริง (2026-08-19)
 - [x] นักวิจัยที่ `is_active = false` ไม่แสดงในทำเนียบ แต่ผลงานเก่ายังนับในสถิติรวม — Phase 3, เพิ่ม UI toggle ใน admin (เดิมมีแค่ column ในฐานข้อมูล ไม่มีทางตั้งค่าได้เลย) (2026-08-19)
+- [x] รายงานสรุปวิเคราะห์ — ส่วน field-dependent (ความร่วมมือระหว่างประเทศ, แหล่งทุน, SDGs, author roles) — Phase 4, ของเดิมถูกต้องอยู่แล้ว 3/4 แท็บ, เพิ่มหมวด "Unclassified" ในแท็บ SDG ที่หายไปทั้งหมด (91.5% ของผลงานไม่มี SDG แต่ก่อนหน้านี้ไม่แสดงที่ไหนเลย) (2026-08-19)
+- [x] SDG mapping ผ่าน CSV import โดย admin (จับคู่ด้วย DOI หรือ title) — ผูกได้สูงสุด 2 SDG ต่อผลงานพร้อม rationale, ไม่มี SDG ที่ match เลย = Unclassified (ดูเหตุผลที่เปลี่ยนจาก auto-mapping แบบ weight ใน Key Decisions) — Phase 4 (2026-08-19)
 
 ### Active
 
-- [ ] รายงานสรุปวิเคราะห์ — ส่วน field-dependent (ความร่วมมือระหว่างประเทศ, แหล่งทุน, SDGs, author roles) — Phase 4
-- [ ] SDG mapping ผ่าน CSV import โดย admin (จับคู่ด้วย DOI หรือ title) — ผูกได้สูงสุด 2 SDG ต่อผลงานพร้อม rationale, ไม่มี SDG ที่ match เลย = Unclassified (ดูเหตุผลที่เปลี่ยนจาก auto-mapping แบบ weight ใน Key Decisions)
-- [ ] Admin panel ล็อกอินผ่าน MEDSCI ACC SSO (Method 1 เท่านั้น) สั่งซิงค์ข้อมูล พร้อม sync lock/mutex กันซิงค์ซ้อน และ audit log (`triggered_by`)
+- [ ] Admin panel ล็อกอินผ่าน MEDSCI ACC SSO (Method 1 เท่านั้น) สั่งซิงค์ข้อมูล พร้อม sync lock/mutex กันซิงค์ซ้อน และ audit log (`triggered_by`) — Phase 5
 
 ### Out of Scope
 
@@ -85,4 +85,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 — Phase 3 (researcher directory, local-aggregate reports) moved to Validated; fixed a critical unauthenticated-mutation vulnerability found in admin/researchers.php; merged parallel server-side security work (web.config, diagnose.php, temp file cleanup) with no conflicts. Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*
+*Last updated: 2026-08-19 — Phase 4 (SDG mapping, field-dependent reports) moved to Validated after fixing the SDG statistics tab's missing Unclassified bucket; 4 of 5 phases complete, only Phase 5 (Admin SSO & Sync Control) remains. Phase 3 (researcher directory, local-aggregate reports) moved to Validated; fixed a critical unauthenticated-mutation vulnerability found in admin/researchers.php; merged parallel server-side security work (web.config, diagnose.php, temp file cleanup) with no conflicts. Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*

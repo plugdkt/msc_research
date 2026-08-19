@@ -48,21 +48,21 @@ Confirmed against the actual production codebase and a live Elsevier API test �
 
 - [x] **REPORT-01**: Reports page is filterable by department, publication year, and staff type
 - [x] **REPORT-02**: Reports include trend overview, department breakdown, quartile summary, researcher ranking, yearly statistics, and publication sources tabs
-- [ ] **REPORT-03**: Reports include an international collaboration tab — each country appearing on a publication gets full credit, not averaged
-- [ ] **REPORT-04**: Reports include a funding sources tab
-- [ ] **REPORT-05**: Reports include an author roles tab
-- [ ] **REPORT-06**: Reports include an SDG statistics tab
+- [x] **REPORT-03**: Reports include an international collaboration tab — each country appearing on a publication gets full credit, not averaged
+- [x] **REPORT-04**: Reports include a funding sources tab
+- [x] **REPORT-05**: Reports include an author roles tab
+- [x] **REPORT-06**: Reports include an SDG statistics tab
 - [x] **REPORT-07**: A publication with co-authors from multiple departments counts toward every department involved in the "department breakdown" report
 
 ### SDG Mapping
 
 > **Revised 2026-08-19** — the original weight-based design below was invalidated by two confirmed facts: (1) Elsevier's SDG classification is a **binary match against fixed Boolean queries per SDG**, not a continuous relevance score — there is no weight to rank or tie-break on; (2) the project's Scopus API key was tested directly against the SciVal Publication Lookup API (`analytics/scival/publication/{id}`, the endpoint that carries SDG data) and returned `403 ENTITLEMENTS_ERROR` — the key has Scopus Search access but no SciVal entitlement. Given the 2026-09-03 deadline, v1 uses the CSV-import mechanism that already exists and works (`admin/sdg_import.php`); automatic SciVal-based mapping is deferred to v2 (see below) pending a separate entitlement request to the university's Elsevier account.
 
-- [ ] **SDG-01**: Admin can import a CSV file (matched by DOI, falling back to title) that assigns up to 2 SDGs (primary + secondary) plus a free-text rationale to existing publications
-- [ ] **SDG-02**: A publication can carry 0, 1, or 2 SDG tags — there is no "highest-weighted" ordering to compute; primary vs. secondary is whatever the imported CSV specifies
-- [ ] **SDG-03**: Publications with no SDG data imported are tagged "Unclassified" rather than left blank or errored
-- [ ] **SDG-04**: SDG assignment is visible on the publication detail view and in report tabs
-- [ ] **SDG-05**: Re-importing a CSV for a publication overwrites its previous SDG tags (primary/secondary/rationale) with the new values — no version history kept
+- [x] **SDG-01**: Admin can import a CSV file (matched by DOI, falling back to title) that assigns up to 2 SDGs (primary + secondary) plus a free-text rationale to existing publications
+- [x] **SDG-02**: A publication can carry 0, 1, or 2 SDG tags — there is no "highest-weighted" ordering to compute; primary vs. secondary is whatever the imported CSV specifies
+- [x] **SDG-03**: Publications with no SDG data imported are tagged "Unclassified" rather than left blank or errored — reports.php's SDG statistics tab had no such bucket at all until 2026-08-19 (see REPORT-06)
+- [x] **SDG-04**: SDG assignment is visible on the publication detail view and in report tabs
+- [x] **SDG-05**: Re-importing a CSV for a publication overwrites its previous SDG tags (primary/secondary/rationale) with the new values — no version history kept
 
 ### Admin & Sync Control
 
@@ -135,16 +135,16 @@ Which phases cover which requirements. Populated during roadmap creation.
 | RESEARCHER-05 | Phase 3 | Done |
 | REPORT-01 | Phase 3 | Done |
 | REPORT-02 | Phase 3 | Done |
-| REPORT-03 | Phase 4 | Pending |
-| REPORT-04 | Phase 4 | Pending |
-| REPORT-05 | Phase 4 | Pending |
-| REPORT-06 | Phase 4 | Pending |
+| REPORT-03 | Phase 4 | Done |
+| REPORT-04 | Phase 4 | Done |
+| REPORT-05 | Phase 4 | Done |
+| REPORT-06 | Phase 4 | Done |
 | REPORT-07 | Phase 3 | Done |
-| SDG-01 | Phase 4 | Pending |
-| SDG-02 | Phase 4 | Pending |
-| SDG-03 | Phase 4 | Pending |
-| SDG-04 | Phase 4 | Pending |
-| SDG-05 | Phase 4 | Pending |
+| SDG-01 | Phase 4 | Done |
+| SDG-02 | Phase 4 | Done |
+| SDG-03 | Phase 4 | Done |
+| SDG-04 | Phase 4 | Done |
+| SDG-05 | Phase 4 | Done |
 | ADMIN-01 | Phase 5 | Pending |
 | ADMIN-02 | Phase 5 | Pending |
 | ADMIN-03 | Phase 5 | Pending |
@@ -158,4 +158,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-08-18*
-*Last updated: 2026-08-19 — decided to keep the 2-column sdg_primary/sdg_secondary design rather than build a many-to-many table (added as deferred v2 item SDG-07); admin/sdg_import.php now extracts every valid SDG code from a multi-value cell like "SDG 3; SDG 12" instead of discarding it, keeps the first 2, and preserves any overflow in sdg_rationale. Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) marked Done: researchers_list.php rewritten for server-side filter/sort/paginate, is_active wired end-to-end (get_all_researchers, admin UI, dashboard rankings), REPORT-01/02/07 verified correct in pre-existing reports.php. Also fixed a critical unauthenticated-mutation bug found in admin/researchers.php during this phase (verified live, only this one admin page was affected). Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*
+*Last updated: 2026-08-19 — Phase 4 (SDG-01..05, REPORT-03..06) marked Done: fixed the one real gap (SDG statistics tab had no "Unclassified" bucket, so 91.5% of publications were invisible in it rather than shown as their own category); REPORT-03/04/05 verified already correct by reading the logic. 4 of 5 phases now complete (31 of 36 v1 requirements); only Phase 5 (ADMIN-01..05, Admin SSO & Sync Control) remains. Decided to keep the 2-column sdg_primary/sdg_secondary design rather than build a many-to-many table (added as deferred v2 item SDG-07); admin/sdg_import.php now extracts every valid SDG code from a multi-value cell like "SDG 3; SDG 12" instead of discarding it, keeps the first 2, and preserves any overflow in sdg_rationale. Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) marked Done: researchers_list.php rewritten for server-side filter/sort/paginate, is_active wired end-to-end (get_all_researchers, admin UI, dashboard rankings), REPORT-01/02/07 verified correct in pre-existing reports.php. Also fixed a critical unauthenticated-mutation bug found in admin/researchers.php during this phase (verified live, only this one admin page was affected). Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*
