@@ -23,10 +23,6 @@ $type_clause_q     = $selected_type !== '' ? " AND r.researcher_type = ?" : "";
 $total_faculty_researchers = get_total_researchers($pdo);
 $total_faculty_pubs = get_total_publications($pdo);
 
-// Fetch last sync time based on the most recently updated publication from external APIs
-$stmtLastSync = $pdo->query("SELECT MAX(updated_at) FROM `publications` WHERE source != 'manual'");
-$last_sync_time = $stmtLastSync->fetchColumn();
-
 // Query unique years in the database for the dropdown
 $years_stmt = $pdo->query("SELECT DISTINCT publish_year FROM publications WHERE publish_year IS NOT NULL AND publish_year > 0 ORDER BY publish_year DESC");
 $years = $years_stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -645,13 +641,6 @@ include_once __DIR__ . '/includes/header.php';
             </select>
         </div>
     </form>
-    <br/>
-     <?php if (!empty($last_sync_time)): ?>
-        <div style="margin-top: 15px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--color-text-muted); background: rgba(255,255,255,0.04); padding: 6px 14px; border-radius: 30px; border: 1px solid var(--border-glass);">
-            <i class="fa-solid fa-rotate" style="color: var(--color-primary);"></i>
-            <span>ซิงค์ข้อมูลล่าสุด: <strong><?php echo format_thai_datetime($last_sync_time); ?></strong></span>
-        </div>
-    <?php endif; ?>
 </div>
 
 <!-- Key Performance Metrics Grid -->

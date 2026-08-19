@@ -188,14 +188,46 @@ function get_publications_by_source_summary($pdo) {
 function get_departments_summary($pdo) {
     try {
         $stmt = $pdo->query("
-            SELECT department, COUNT(*) as count 
-            FROM `researchers` 
+            SELECT department, COUNT(*) as count
+            FROM `researchers`
             GROUP BY department
             ORDER BY count DESC
         ");
         return $stmt->fetchAll();
     } catch (PDOException $e) {
         return [];
+    }
+}
+
+/**
+ * DASH-06: timestamp of the most recent completed sync, for display on
+ * every public page. Reads sync_log first (added in Phase 1) since it
+ * records the actual sync run, not just "some publication row changed" —
+ * falls back to the pre-sync_log heuristic (latest non-manual publication
+ * update) only if sync_log has no successful/partial run yet (e.g. a
+ * database that hasn't run the Phase 1 migration).
+ */
+function get_last_sync_time($pdo) {
+    try {
+        $stmt = $pdo->query("
+            SELECT completed_at FROM `sync_log`
+            WHERE status IN ('success', 'partial') AND completed_at IS NOT NULL
+            ORDER BY completed_at DESC
+            LIMIT 1
+        ");
+        $ts = $stmt->fetchColumn();
+        if ($ts) {
+            return $ts;
+        }
+    } catch (PDOException $e) {
+        // sync_log may not exist yet on a pre-migration database — fall through.
+    }
+
+    try {
+        $stmt = $pdo->query("SELECT MAX(updated_at) FROM `publications` WHERE source != 'manual'");
+        return $stmt->fetchColumn() ?: null;
+    } catch (PDOException $e) {
+        return null;
     }
 }
 

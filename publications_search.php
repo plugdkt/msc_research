@@ -8,7 +8,8 @@ $current_page = 'publications_search';
 $page_title = 'ค้นหาผลงานวิจัย';
 
 // Pagination variables
-$limit = 15;
+// SEARCH-03: 20 results per page
+$limit = 20;
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($page - 1) * $limit;
 

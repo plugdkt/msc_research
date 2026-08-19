@@ -67,6 +67,18 @@
         </div>
     </header>
 
+    <?php
+    // DASH-06: last-synced timestamp, shown on every public page. $pdo comes
+    // from the including page (via includes/functions.php -> config/db.php).
+    $header_last_sync = isset($pdo) ? get_last_sync_time($pdo) : null;
+    ?>
+    <div class="container" style="text-align: center; margin: 12px auto 0;">
+        <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--color-text-muted); background: rgba(255,255,255,0.04); padding: 6px 16px; border-radius: 30px; border: 1px solid var(--border-glass);">
+            <i class="fa-solid fa-rotate" style="color: var(--color-primary);"></i>
+            <span>ซิงค์ข้อมูลล่าสุด: <strong><?php echo format_thai_datetime($header_last_sync); ?></strong></span>
+        </span>
+    </div>
+
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.getElementById('mobile-menu-toggle');

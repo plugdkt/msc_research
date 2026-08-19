@@ -16,10 +16,6 @@ $total_citations = get_total_citations($pdo);
 $stmtInterCollabs = $pdo->query("SELECT COUNT(*) FROM `publications` WHERE countries IS NOT NULL AND TRIM(countries) != '' AND TRIM(REPLACE(REPLACE(countries, 'Thailand', ''), ',', '')) != ''");
 $international_collabs_count = $stmtInterCollabs->fetchColumn() ?: 0;
 
-// Fetch last sync time based on the most recently updated publication from external APIs
-$stmtLastSync = $pdo->query("SELECT MAX(updated_at) FROM `publications` WHERE source != 'manual'");
-$last_sync_time = $stmtLastSync->fetchColumn();
-
 $recent_pubs = get_recent_publications($pdo, 6);
 $yearly_stats = get_publications_by_year_summary($pdo);
 $source_stats = get_publications_by_source_summary($pdo);
@@ -136,10 +132,6 @@ include_once __DIR__ . '/includes/header.php';
 <div class="hero glass-panel animate-fade-in">
     <h2>ระบบคลังผลงานวิจัย <br/>(Research Repository System)</h2>
     <p>บุคลากร คณะวิทยาศาสตร์การแพทย์ มหาวิทยาลัยพะเยา</p>
-    <div style="margin-top: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--color-text-muted); background: rgba(255,255,255,0.04); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border-glass);">
-        <i class="fa-solid fa-rotate" style="color: var(--color-primary);"></i>
-        <span>ซิงค์ข้อมูลล่าสุด: <strong><?php echo format_thai_datetime($last_sync_time); ?></strong></span>
-    </div>
 </div>
 
 <!-- Stats Grid -->
