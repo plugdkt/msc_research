@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Scopus Sync Engine & Data Foundation** - Publication/researcher data reliably syncs from Scopus into MySQL with full error handling, verified against the real schema and API, while public reads stay unaffected
 - [x] **Phase 2: Public Dashboard & Search** - Public users can view an at-a-glance dashboard and search publications by title/author/quartile
-- [ ] **Phase 3: Researcher Directory & Local-Aggregate Reports** - Users can browse a filterable researcher directory and the six local-aggregate report tabs
+- [x] **Phase 3: Researcher Directory & Local-Aggregate Reports** - Users can browse a filterable researcher directory and the six local-aggregate report tabs
 - [ ] **Phase 4: SDG Mapping & Extended Reports** - Every publication is auto-tagged with SDGs and the four field-dependent report tabs are available
 - [ ] **Phase 5: Admin SSO & Sync Control** - An authenticated admin can safely trigger syncs via MEDSCI ACC SSO with audit logging
 
@@ -59,6 +59,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Reports page is filterable by department, publication year, and staff type
   4. Reports show trend, department breakdown, quartile summary, researcher ranking, yearly statistics, and sources tabs, with every aggregate value verified against a hand-computed value on a known dataset (no join fan-out inflation)
   5. A publication with co-authors from multiple departments counts toward every department involved in the department breakdown report
+**Status (2026-08-19)**: Complete. researchers_list.php rewritten from client-side JS filtering (incompatible with real pagination) to server-side filter+sort+paginate; added the ascending/descending toggle and 20/page pagination, both previously missing entirely. Wired is_active end-to-end: get_all_researchers() defaults to active-only for public callers, admin/researchers.php got a toggle-active button + form checkbox (previously no UI existed for the column at all), dashboard "top researcher" spotlights exclude inactive researchers while faculty-wide totals still include their historical publications (verified: total stays 776 regardless). reports.php's REPORT-01/02/07 were already correct in the pre-existing code, verified by reading the department-breakdown query's correlated-subquery logic, not just running it.
+**Critical fix found during this phase**: admin/researchers.php required admin_header.php (where the login check lives) only at the very bottom, after every action handler (delete, save, CSV import, and the new toggle_active). Verified live: an unauthenticated GET to `researchers.php?toggle_active=<id>` mutated the database with zero session. This was the only admin page with the bug (all other 9 admin/*.php pages gate correctly) - fixed by moving the auth check to the top of the file.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -100,7 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Scopus Sync Engine & Data Foundation | - | Complete | 2026-08-19 |
 | 2. Public Dashboard & Search | - | Complete | 2026-08-19 |
-| 3. Researcher Directory & Local-Aggregate Reports | 0/TBD | Not started | - |
+| 3. Researcher Directory & Local-Aggregate Reports | - | Complete | 2026-08-19 |
 | 4. SDG Mapping & Extended Reports | 0/TBD | Not started | - |
 | 5. Admin SSO & Sync Control | 0/TBD | Not started | - |
 

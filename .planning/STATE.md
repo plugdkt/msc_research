@@ -3,10 +3,10 @@ gsd_state_version: '1.0'
 status: in_progress
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 0
   completed_plans: 0
-  percent: 40
+  percent: 60
 ---
 
 # Project State
@@ -16,16 +16,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-19)
 
 **Core value:** ข้อมูลผลงานตีพิมพ์ของคณะที่ซิงค์มาจาก Scopus ต้องถูกต้อง ครบถ้วน และเข้าถึงได้แบบสาธารณะตลอดเวลา แม้ระหว่างที่กำลังซิงค์ข้อมูลอยู่ก็ตาม
-**Current focus:** Phase 3 — Researcher Directory & Local-Aggregate Reports
+**Current focus:** Phase 4 — SDG Mapping & Extended Reports
 
 ## Current Position
 
-Phase: 3 of 5 (Researcher Directory & Local-Aggregate Reports)
+Phase: 4 of 5 (SDG Mapping & Extended Reports)
 Plan: 0 of TBD in current phase
-Status: Phase 1 and Phase 2 complete and verified against real production data (776 publications, 97 researchers, via local Docker stack)
-Last activity: 2026-08-19 — Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) implemented, tested, and pushed
+Status: Phases 1-3 complete and verified against real production data (776 publications, 97 researchers, via local Docker stack)
+Last activity: 2026-08-19 — Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) implemented, tested, and pushed; merged with parallel server-side security work (web.config, diagnose.php, temp file cleanup, no conflicts)
 
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -67,7 +67,9 @@ None yet.
 - SDG data has a real-world quality issue: some existing values are non-standard (e.g. literal "ไม่ทราบ" = "unknown", or multiple codes crammed into one column like "SDG 3; SDG 12"). Normalization fixed for the single-value case (4f52f16); the multi-value case surfaces a genuine schema gap — some publications match 3+ SDGs and the current 2-fixed-column design can't represent that. Needs a decision before/during Phase 4: accept the 2-max cap as a product simplification, or add a proper `publication_sdgs` many-to-many table.
 - `sso_integration_guide.md` contains a Developer Bypass credential and must never be committed — already gitignored since project start.
 - Real production data also has a `superadmin` vs `admin` role distinction in `users` that the original codebase captured in the UI (admin/users.php) but never actually enforced anywhere — was a live privilege-escalation bug, fixed 2026-08-19 (4f52f16).
+- **Resolved 2026-08-19 — critical**: `admin/researchers.php` required the login-check include (`admin_header.php`) only at the very bottom of the file, after every action handler (delete, save, CSV import, and the new is_active toggle). Verified live against the Docker stack: an anonymous request mutated the database with zero session. Scanned all 10 admin/*.php pages — this was the only one affected. Fixed by moving the auth check to the top of the file, before any action handling.
 - Credentials (DB password, Scopus API key, SSO client secret) found hardcoded in `config/db.php` were moved to a gitignored `config/secrets.local.php` (34f7360) but have NOT been rotated with their providers yet — still pending, should happen before any real deployment.
+- A second session/machine is doing parallel security hardening directly (web.config, diagnose.php, temp file cleanup) and pushing to the same GitHub repo — merged cleanly once on 2026-08-19 (no file overlap), but double-check `git log`/`git remote -v` before assuming "pushed" means "on GitHub" when working across sessions.
 - Hard external deadline: presentation 2026-09-03 (16 days from 2026-08-18) — keep phase execution tight to this timeline.
 
 ## Deferred Items
@@ -83,5 +85,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-08-19
-Stopped at: Phase 1 (e3fc4d4, 4f52f16) and Phase 2 (6024c18) implemented, tested against real production data via local Docker stack, and pushed to master. Next: Phase 3 (Researcher Directory & Local-Aggregate Reports) — note researchers_list.php and reports.php already exist from the pre-existing codebase, same pattern as Phase 2 (verify against requirements, fix real gaps, rather than rewrite from scratch).
+Stopped at: Phases 1-3 implemented, tested against real production data via local Docker stack, and pushed to master (merged with parallel server-side security commits along the way). Next: Phase 4 (SDG Mapping & Extended Reports) - blocked on a product decision first: the 2-fixed-column sdg_primary/sdg_secondary schema can't represent publications that genuinely match 3+ SDGs (found real examples during Phase 3 testing). Decide whether to accept the 2-max cap or add a proper publication_sdgs many-to-many table before building the SDG statistics/extended report tabs (REPORT-03/04/05/06) on top of it.
 Resume file: None

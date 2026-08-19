@@ -38,21 +38,21 @@ Confirmed against the actual production codebase and a live Elsevier API test �
 
 ### Researcher Directory
 
-- [ ] **RESEARCHER-01**: User can view a researcher directory filterable by department and staff type
-- [ ] **RESEARCHER-02**: User can sort the directory by publication count, citations, or h-index — descending by default, with an ascending toggle
-- [ ] **RESEARCHER-03**: Researcher directory paginates at 20 per page
-- [ ] **RESEARCHER-04**: Each directory entry shows Thai and English name, department, Scopus ID, publication count, total citations, and h-index
-- [ ] **RESEARCHER-05**: Researchers with `is_active = false` are hidden from the directory, but their historical publications still count in faculty-wide statistics
+- [x] **RESEARCHER-01**: User can view a researcher directory filterable by department and staff type
+- [x] **RESEARCHER-02**: User can sort the directory by publication count, citations, or h-index — descending by default, with an ascending toggle
+- [x] **RESEARCHER-03**: Researcher directory paginates at 20 per page
+- [x] **RESEARCHER-04**: Each directory entry shows Thai and English name, department, Scopus ID, publication count, total citations, and h-index
+- [x] **RESEARCHER-05**: Researchers with `is_active = false` are hidden from the directory, but their historical publications still count in faculty-wide statistics
 
 ### Reports
 
-- [ ] **REPORT-01**: Reports page is filterable by department, publication year, and staff type
-- [ ] **REPORT-02**: Reports include trend overview, department breakdown, quartile summary, researcher ranking, yearly statistics, and publication sources tabs
+- [x] **REPORT-01**: Reports page is filterable by department, publication year, and staff type
+- [x] **REPORT-02**: Reports include trend overview, department breakdown, quartile summary, researcher ranking, yearly statistics, and publication sources tabs
 - [ ] **REPORT-03**: Reports include an international collaboration tab — each country appearing on a publication gets full credit, not averaged
 - [ ] **REPORT-04**: Reports include a funding sources tab
 - [ ] **REPORT-05**: Reports include an author roles tab
 - [ ] **REPORT-06**: Reports include an SDG statistics tab
-- [ ] **REPORT-07**: A publication with co-authors from multiple departments counts toward every department involved in the "department breakdown" report
+- [x] **REPORT-07**: A publication with co-authors from multiple departments counts toward every department involved in the "department breakdown" report
 
 ### SDG Mapping
 
@@ -127,18 +127,18 @@ Which phases cover which requirements. Populated during roadmap creation.
 | SEARCH-01 | Phase 2 | Done |
 | SEARCH-02 | Phase 2 | Done |
 | SEARCH-03 | Phase 2 | Done |
-| RESEARCHER-01 | Phase 3 | Pending |
-| RESEARCHER-02 | Phase 3 | Pending |
-| RESEARCHER-03 | Phase 3 | Pending |
-| RESEARCHER-04 | Phase 3 | Pending |
-| RESEARCHER-05 | Phase 3 | Pending |
-| REPORT-01 | Phase 3 | Pending |
-| REPORT-02 | Phase 3 | Pending |
+| RESEARCHER-01 | Phase 3 | Done |
+| RESEARCHER-02 | Phase 3 | Done |
+| RESEARCHER-03 | Phase 3 | Done |
+| RESEARCHER-04 | Phase 3 | Done |
+| RESEARCHER-05 | Phase 3 | Done |
+| REPORT-01 | Phase 3 | Done |
+| REPORT-02 | Phase 3 | Done |
 | REPORT-03 | Phase 4 | Pending |
 | REPORT-04 | Phase 4 | Pending |
 | REPORT-05 | Phase 4 | Pending |
 | REPORT-06 | Phase 4 | Pending |
-| REPORT-07 | Phase 3 | Pending |
+| REPORT-07 | Phase 3 | Done |
 | SDG-01 | Phase 4 | Pending |
 | SDG-02 | Phase 4 | Pending |
 | SDG-03 | Phase 4 | Pending |
@@ -157,4 +157,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-08-18*
-*Last updated: 2026-08-19 — Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*
+*Last updated: 2026-08-19 — Phase 3 (RESEARCHER-01..05, REPORT-01/02/07) marked Done: researchers_list.php rewritten for server-side filter/sort/paginate, is_active wired end-to-end (get_all_researchers, admin UI, dashboard rankings), REPORT-01/02/07 verified correct in pre-existing reports.php. Also fixed a critical unauthenticated-mutation bug found in admin/researchers.php during this phase (verified live, only this one admin page was affected). Phase 1 (SYNC-01..05) and Phase 2 (DASH-01..06, SEARCH-01..03) marked Done after implementation and verification against real production data via a local Docker stack. SDG Mapping section rewritten from weight-based to CSV-import-based after confirming Elsevier's SDG classification is binary (not weighted) and the project's API key lacks SciVal entitlement (tested directly, 403 ENTITLEMENTS_ERROR); SciVal auto-mapping added as v2 item SDG-06. v1 requirement count unchanged (36).*

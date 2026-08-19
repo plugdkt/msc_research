@@ -15,14 +15,15 @@
 - [x] ซิงค์ข้อมูลผลงานตีพิมพ์/นักวิจัยจาก Scopus API เข้าสู่ MySQL พร้อม error handling (timeout retry, rate limit backoff, ข้อมูลไม่สมบูรณ์ skip record, Scopus Author ID ซ้ำ reject) — Phase 1, ทดสอบกับ production data จริง 85 นักวิจัย ไม่มี error (2026-08-19)
 - [x] แดชบอร์ดหลักแสดงภาพรวม (จำนวนนักวิจัย, ผลงาน, citations, สัดส่วน quartile, ผู้มีผลงาน/citations/h-index สูงสุด, สถิติรายปี, ผลงานล่าสุด) — Phase 2, verified ผ่าน curl ทุกหน้า ไม่มี error (2026-08-19)
 - [x] ค้นหา/กรองผลงานวิจัยตาม title + author (partial match) และ Scopus quartile พร้อม pagination 20 รายการ/หน้า — Phase 2, แก้ bug pagination 15→20 แล้ว (2026-08-19)
+- [x] ทำเนียบนักวิจัย กรองตามภาควิชา/ประเภทบุคลากร เรียงตามผลงาน/citations/h-index (default descending, toggle ascending ได้) พร้อม pagination — Phase 3, เขียนใหม่จาก client-side filter (ใช้ pagination จริงไม่ได้) เป็น server-side filter+sort+paginate (2026-08-19)
+- [x] รายงานสรุปวิเคราะห์ — ส่วน local-aggregate (แนวโน้ม, แยกภาควิชา, quartiles, จัดอันดับนักวิจัย, สถิติรายปี, sources) — Phase 3, ของเดิมถูกต้องอยู่แล้ว ตรวจสอบ query แยกภาควิชาแล้วว่านับผลงานผู้แต่งร่วมหลายภาควิชาซ้ำได้ถูกต้องจริง (2026-08-19)
+- [x] นักวิจัยที่ `is_active = false` ไม่แสดงในทำเนียบ แต่ผลงานเก่ายังนับในสถิติรวม — Phase 3, เพิ่ม UI toggle ใน admin (เดิมมีแค่ column ในฐานข้อมูล ไม่มีทางตั้งค่าได้เลย) (2026-08-19)
 
 ### Active
 
-- [ ] ทำเนียบนักวิจัย กรองตามภาควิชา/ประเภทบุคลากร เรียงตามผลงาน/citations/h-index (default descending, toggle ascending ได้) พร้อม pagination
-- [ ] รายงานสรุปวิเคราะห์หลายแท็บ (แนวโน้ม, แยกภาควิชา, quartiles, ความร่วมมือระหว่างประเทศ, แหล่งทุน, SDGs, จัดอันดับนักวิจัย, สถิติรายปี, sources, author roles)
+- [ ] รายงานสรุปวิเคราะห์ — ส่วน field-dependent (ความร่วมมือระหว่างประเทศ, แหล่งทุน, SDGs, author roles) — Phase 4
 - [ ] SDG mapping ผ่าน CSV import โดย admin (จับคู่ด้วย DOI หรือ title) — ผูกได้สูงสุด 2 SDG ต่อผลงานพร้อม rationale, ไม่มี SDG ที่ match เลย = Unclassified (ดูเหตุผลที่เปลี่ยนจาก auto-mapping แบบ weight ใน Key Decisions)
 - [ ] Admin panel ล็อกอินผ่าน MEDSCI ACC SSO (Method 1 เท่านั้น) สั่งซิงค์ข้อมูล พร้อม sync lock/mutex กันซิงค์ซ้อน และ audit log (`triggered_by`)
-- [ ] นักวิจัยที่ `is_active = false` ไม่แสดงในทำเนียบ แต่ผลงานเก่ายังนับในสถิติรวม
 
 ### Out of Scope
 
@@ -35,10 +36,12 @@
 - ระบบเดิมรันอยู่แล้วเป็น server-rendered PHP บน IIS (www.medsci.up.ac.th) — URL pattern สังเกตได้: index.php, publications_search.php, researchers_list.php, reports.php, admin/index.php
 - Draft schema (researchers, publications, publication_authors, sync_log, sdgs, publication_sdgs) อิงจากข้อมูลที่แสดงบนหน้าเว็บเดิม **ยังไม่ยืนยันกับโครงสร้างฐานข้อมูลจริง** — ต้องตรวจสอบก่อนเขียนโค้ด/test ที่อิงชื่อตาราง/คอลัมน์
 - **[สำคัญมาก — ความปลอดภัย]** พบไฟล์ `sso_integration_guide.md` ในโฟลเดอร์โปรเจกต์ ซึ่งตาม SPEC.md ระบุว่ามี Developer Bypass credential ฝังอยู่ ห้าม commit ขึ้น git repo เด็ดขาด (แม้ private repo) — ได้เพิ่มเข้า `.gitignore` แล้วตั้งแต่เริ่มโปรเจกต์
+- **[แก้ไขแล้ว 2026-08-19 — ช่องโหว่ร้ายแรง]** `admin/researchers.php` เดิม require `admin_header.php` (จุดที่เช็ค login) ไว้ล่างสุดของไฟล์ **หลัง** action handler ทั้งหมด (delete, save, import CSV) — ทดสอบจริงยืนยันว่าใครก็ได้ที่ไม่ login สามารถยิง `researchers.php?delete=<id>` ได้ผลจริง ตรวจสอบทุกไฟล์ admin/*.php แล้วพบว่าเป็นไฟล์เดียวที่มีปัญหานี้ (อีก 9 ไฟล์ gate ถูกต้อง) — ย้าย auth check ไปไว้บนสุดของไฟล์แล้ว
 - Timeline กระชับมาก: นำเสนอ 3 กันยายน 2569 (เหลือ 16 วันนับจาก 18 ส.ค. 2569 ตอนเริ่มโปรเจกต์)
 - ยังมี Open Questions ที่ต้องยืนยันกับอาจารย์/ทีม IT ก่อน implement จริง (ดู SPEC.md หัวข้อ 12): อายุ token/replay policy ของ MEDSCI ACC, frontend framework จริง, นโยบายรัน self-hosted GitHub Actions runner, รูปแบบไฟล์ config ปัจจุบัน
 - **[แก้ไข 2026-08-19]** Open Question เดิมเรื่อง "Scopus API field ที่ให้ค่า SDG weight" มีคำตอบแล้ว: **ไม่มี field แบบนั้นอยู่จริง** — Elsevier แบ่งประเภท SDG แบบ binary (match/ไม่ match กับ Boolean query ที่กำหนดไว้) ไม่มี weight ให้จัดอันดับ และ SDG data อยู่คนละ product (SciVal Publication Lookup API) ซึ่งทดสอบ API key ของโปรเจกต์แล้วไม่มีสิทธิ์เข้าถึง (403 ENTITLEMENTS_ERROR) — v1 จึงใช้ CSV import แทน ดู Key Decisions
 - **[ยืนยันแล้ว 2026-08-19]** แหล่งข้อมูลผลงาน = Scopus อย่างเดียว (ระบบเดิมก่อน rewrite ดึงจาก ORCID/PubMed/Google Scholar ด้วย แต่ตั้งใจตัดออกเพราะเป็นสาเหตุปัญหาซ้ำๆ) และ Quartile = import Excel จาก Scimago ต่อไปตามเดิม (ยืนยันแล้วว่า Scimago ไม่มี public API)
+- **[2026-08-19]** พบว่ามีอีก session/เครื่องหนึ่งกำลังแก้ไข security บนฝั่ง server แบบขนานกัน (`web.config` hardening, auth guard บน `diagnose.php`, ลบ `admin/temp_*.php` และ `fix_admin.php`) — commit มาถึง GitHub ช้ากว่าที่แจ้งไว้ในแชทตอนแรก ทำให้เกิดความสับสนชั่วคราวว่า push สำเร็จหรือยัง สุดท้าย merge เข้ากันได้สะอาด (คนละไฟล์กันทั้งหมด ไม่มี conflict) — ควรเช็ค `git remote -v`/`git log` ให้ตรงกันทุกครั้งที่มีคนทำงานพร้อมกันหลาย session
 
 ## Constraints
 
@@ -59,6 +62,7 @@
 | Re-import CSV เขียนทับ SDG tag เดิมทั้งหมด ไม่เก็บ version ประวัติ | ลดความซับซ้อน เหมาะกับ timeline ที่จำกัด | ✓ Good |
 | แหล่งข้อมูลผลงาน = Scopus อย่างเดียว (ไม่ทำ ORCID/PubMed/Google Scholar แบบระบบเดิมก่อน rewrite) | ระบบเดิมดึงหลายแหล่งแล้วเจอปัญหา matching/dedup ซ้ำๆ ตามที่เจ้าของโปรเจกต์ยืนยัน | ✓ Good |
 | Quartile = คงการ import Excel จาก Scimago ต่อไป ไม่สร้าง live API integration | ยืนยันแล้วว่า Scimago ไม่มี public API ให้เรียกจริง | ✓ Good |
+| `is_active` = toggle ผ่านปุ่มใน admin (ไม่ใช่ hard delete) | ลบนักวิจัยจริงจะ cascade ลบ `researcher_publications` ทำให้ผลงานเก่าหลุดจากสถิติรวมของคณะ ขัดกับ RESEARCHER-05 | ✓ Good |
 | นักวิจัย inactive ซ่อนจากทำเนียบแต่ผลงานเก่ายังนับสถิติรวม | รักษาความถูกต้องของสถิติภาพรวมคณะย้อนหลัง | — Pending |
 | ผลงานผู้แต่งร่วมหลายภาควิชานับซ้ำได้ทุกภาควิชา, ความร่วมมือหลายประเทศนับเครดิตเต็มทุกประเทศ | ค่าเริ่มต้านที่ให้ภาพรวมความร่วมมือครบถ้วนที่สุด รอยืนยันกับคณะ | — Pending |
 | gitignore `sso_integration_guide.md` ตั้งแต่เริ่มโปรเจกต์ | เอกสารมี Developer Bypass credential ฝังอยู่ หลุดจะกระทบทุกระบบที่เชื่อม MEDSCI ACC | ✓ Good |
@@ -81,4 +85,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 — Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*
+*Last updated: 2026-08-19 — Phase 3 (researcher directory, local-aggregate reports) moved to Validated; fixed a critical unauthenticated-mutation vulnerability found in admin/researchers.php; merged parallel server-side security work (web.config, diagnose.php, temp file cleanup) with no conflicts. Phase 1 (Scopus sync engine) and Phase 2 (dashboard & search) moved to Validated after implementation and testing against real production data; resolved the SDG-weight/SciVal open question (confirmed no weight field exists and the project's API key lacks SciVal entitlement via a live test), confirmed Scopus-only source and Scimago-Excel-import quartile decisions*
