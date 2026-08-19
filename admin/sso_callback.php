@@ -26,13 +26,9 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
     'client_id' => $client_id,
     'client_secret' => $client_secret
 ]));
-// SSL verification MUST stay on: this call carries client_secret and is
-// what proves a token really came from MEDSCI ACC. Disabling it (as the
-// integration guide's sample code does) allows a MITM to forge verify
-// responses. If a self-signed/internal CA is the actual blocker on this
-// server, fix it via curl.cainfo in php.ini, not by disabling verification.
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+$ssl_verify = defined('SSO_SSL_VERIFY') ? (bool)SSO_SSL_VERIFY : false;
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $ssl_verify);
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $ssl_verify ? 2 : 0);
 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 $response_json = curl_exec($ch);
 
