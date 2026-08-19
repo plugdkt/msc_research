@@ -21,10 +21,15 @@ $yearly_stats = get_publications_by_year_summary($pdo);
 $source_stats = get_publications_by_source_summary($pdo);
 
 // Fetch top researcher for publications count (with ties)
+// RESEARCHER-05: inactive researchers aren't spotlighted here (their old
+// publications still count in $total_pubs/$total_citations above, which
+// don't filter by is_active) - but showing a departed researcher as the
+// current "top researcher" would be misleading on a public page.
 $stmtMaxPubs = $pdo->query("
     SELECT COUNT(rp.publication_id) as val
     FROM `researchers` r
     LEFT JOIN `researcher_publications` rp ON r.id = rp.researcher_id
+    WHERE r.is_active = 1
     GROUP BY r.id
     ORDER BY val DESC
     LIMIT 1
@@ -35,6 +40,7 @@ $stmtTopPubs = $pdo->prepare("
     SELECT r.id, r.title_th, r.first_name_th, r.last_name_th, r.department
     FROM `researchers` r
     LEFT JOIN `researcher_publications` rp ON r.id = rp.researcher_id
+    WHERE r.is_active = 1
     GROUP BY r.id
     HAVING COUNT(rp.publication_id) = ?
     ORDER BY r.first_name_th ASC
@@ -48,6 +54,7 @@ $stmtMaxCitations = $pdo->query("
     FROM `researchers` r
     LEFT JOIN `researcher_publications` rp ON r.id = rp.researcher_id
     LEFT JOIN `publications` p ON rp.publication_id = p.id
+    WHERE r.is_active = 1
     GROUP BY r.id
     ORDER BY val DESC
     LIMIT 1
@@ -59,6 +66,7 @@ $stmtTopCitations = $pdo->prepare("
     FROM `researchers` r
     LEFT JOIN `researcher_publications` rp ON r.id = rp.researcher_id
     LEFT JOIN `publications` p ON rp.publication_id = p.id
+    WHERE r.is_active = 1
     GROUP BY r.id
     HAVING COALESCE(SUM(p.citation_count), 0) = ?
     ORDER BY r.first_name_th ASC

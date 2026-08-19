@@ -13,7 +13,7 @@ $message = '';
 $message_type = 'success';
 
 // Fetch all researchers to populate drop-downs
-$researchers = get_all_researchers($pdo);
+$researchers = get_all_researchers($pdo, false); // admin manages everyone, including inactive
 
 // 1. Process Single Manual Publication Insert
 if (isset($_POST['import_single'])) {

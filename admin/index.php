@@ -14,7 +14,7 @@ $total_researchers = get_total_researchers($pdo);
 $total_citations = get_total_citations($pdo);
 
 // Fetch researcher details
-$researchers = get_all_researchers($pdo);
+$researchers = get_all_researchers($pdo, false); // admin manages everyone, including inactive
 ?>
 
 <div class="hero glass-panel animate-fade-in" style="padding: 30px 20px; margin-bottom: 30px;">

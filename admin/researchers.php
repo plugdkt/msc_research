@@ -6,6 +6,20 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// SECURITY: this check MUST run before every action handler below
+// (download, delete, toggle_active, save, import) - all of them mutate or
+// expose data and none should be reachable without an admin session. This
+// file historically required admin_header.php only at the very bottom (for
+// the CSV download's raw Content-Type headers), which meant every action
+// above that point ran completely unauthenticated. Verified live: an
+// anonymous GET to researchers.php?toggle_active=<id> changed the row with
+// no session at all. Fixed by gating here instead of relying on
+// admin_header.php's later check.
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: login.php');
+    exit;
+}
+
 // Must handle file download BEFORE any HTML output
 require_once __DIR__ . '/../config/db.php';
 
@@ -27,6 +41,26 @@ $page_title = 'จัดการรายชื่อนักวิจัย -
 
 $message = '';
 $message_type = 'success';
+
+// RESEARCHER-05: toggle is_active instead of deleting, for researchers who
+// left the faculty - their historical publications must keep counting in
+// faculty-wide stats, which a hard delete would break (via the cascading
+// researcher_publications cleanup below).
+if (isset($_GET['toggle_active'])) {
+    $toggle_id = (int)$_GET['toggle_active'];
+    $tog_search = trim($_GET['search'] ?? '');
+    $tog_dept   = trim($_GET['dept']   ?? '');
+    $tog_type   = trim($_GET['type']   ?? '');
+    $tog_qs     = http_build_query(array_filter(['search' => $tog_search, 'dept' => $tog_dept, 'type' => $tog_type]));
+    $tog_suffix = $tog_qs ? '?' . $tog_qs : '';
+
+    $stmt = $pdo->prepare("UPDATE `researchers` SET is_active = NOT is_active WHERE id = ?");
+    $stmt->execute([$toggle_id]);
+    $_SESSION['admin_message'] = "อัปเดตสถานะนักวิจัยเรียบร้อยแล้ว";
+    $_SESSION['admin_message_type'] = "success";
+    header("Location: researchers.php" . $tog_suffix);
+    exit;
+}
 
 // Handle delete action
 if (isset($_GET['delete'])) {
@@ -109,6 +143,7 @@ if (isset($_POST['save_researcher'])) {
     $email = !empty($_POST['email']) ? trim($_POST['email']) : null;
     $avatar_url = !empty($_POST['avatar_url']) ? trim($_POST['avatar_url']) : null;
     $researcher_type = !empty($_POST['researcher_type']) ? trim($_POST['researcher_type']) : 'สายวิชาการ';
+    $is_active = isset($_POST['is_active']) ? 1 : 0;
 
     if (empty($first_name_th) || empty($last_name_th) || empty($first_name_en) || empty($last_name_en) || empty($department)) {
         $message = "กรุณากรอกฟิลด์บังคับให้ครบถ้วน (ชื่อ, นามสกุล และ ภาควิชา)";
@@ -131,12 +166,12 @@ if (isset($_POST['save_researcher'])) {
             if ($researcher_id) {
                 // Update
                 $stmt = $pdo->prepare("
-                    UPDATE `researchers` 
-                    SET title_th = ?, first_name_th = ?, last_name_th = ?, 
-                        title_en = ?, first_name_en = ?, last_name_en = ?, 
-                        orcid_id = ?, scopus_author_id = ?, pubmed_query = NULL, 
+                    UPDATE `researchers`
+                    SET title_th = ?, first_name_th = ?, last_name_th = ?,
+                        title_en = ?, first_name_en = ?, last_name_en = ?,
+                        orcid_id = ?, scopus_author_id = ?, pubmed_query = NULL,
                         google_scholar_id = ?, department = ?, email = ?, avatar_url = ?,
-                        researcher_type = ?
+                        researcher_type = ?, is_active = ?
                     WHERE id = ?
                 ");
                 $stmt->execute([
@@ -144,23 +179,23 @@ if (isset($_POST['save_researcher'])) {
                     $title_en, $first_name_en, $last_name_en,
                     $orcid_id, $scopus_author_id,
                     $google_scholar_id, $department, $email, $avatar_url,
-                    $researcher_type,
+                    $researcher_type, $is_active,
                     $researcher_id
                 ]);
                 $_SESSION['admin_message'] = "อัปเดตข้อมูลนักวิจัยสำเร็จ";
             } else {
                 // Insert
                 $stmt = $pdo->prepare("
-                    INSERT INTO `researchers` 
-                    (title_th, first_name_th, last_name_th, title_en, first_name_en, last_name_en, orcid_id, scopus_author_id, pubmed_query, google_scholar_id, department, email, avatar_url, researcher_type)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+                    INSERT INTO `researchers`
+                    (title_th, first_name_th, last_name_th, title_en, first_name_en, last_name_en, orcid_id, scopus_author_id, pubmed_query, google_scholar_id, department, email, avatar_url, researcher_type, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([
                     $title_th, $first_name_th, $last_name_th,
                     $title_en, $first_name_en, $last_name_en,
                     $orcid_id, $scopus_author_id,
                     $google_scholar_id, $department, $email, $avatar_url,
-                    $researcher_type
+                    $researcher_type, $is_active
                 ]);
                 $_SESSION['admin_message'] = "เพิ่มข้อมูลนักวิจัยเรียบร้อยแล้ว";
             }
@@ -477,7 +512,12 @@ require_once __DIR__ . '/admin_header.php';
                     <?php foreach ($researchers as $r): ?>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.01)'" onmouseout="this.style.background='none'">
                             <td style="padding: 12px 8px; font-weight: 500;">
-                                <div style="color: var(--color-text-main);"><?php echo htmlspecialchars(($r['title_th'] ?? '') . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']); ?></div>
+                                <div style="color: var(--color-text-main); display: flex; align-items: center; gap: 6px;">
+                                    <?php echo htmlspecialchars(($r['title_th'] ?? '') . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']); ?>
+                                    <?php if (empty($r['is_active'])): ?>
+                                        <span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); font-size: 0.65rem; font-weight: 600;">พ้นสภาพ</span>
+                                    <?php endif; ?>
+                                </div>
                                 <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-eng);"><?php echo htmlspecialchars(($r['title_en'] ?? '') . ' ' . $r['first_name_en'] . ' ' . $r['last_name_en']); ?></div>
                             </td>
                             <td style="padding: 12px 8px;">
@@ -524,6 +564,9 @@ require_once __DIR__ . '/admin_header.php';
                                     </a>
                                     <a href="researchers.php?edit=<?php echo $r['id']; ?><?php echo $filter_qs ? '&' . $filter_qs : ''; ?>" class="btn-premium" style="padding: 6px 10px; font-size: 0.75rem; font-weight: 500; background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: none;" title="แก้ไขข้อมูล">
                                         <i class="fa-solid fa-edit"></i>
+                                    </a>
+                                    <a href="researchers.php?toggle_active=<?php echo $r['id']; ?><?php echo $filter_qs ? '&' . $filter_qs : ''; ?>" class="btn-premium" style="padding: 6px 10px; font-size: 0.75rem; font-weight: 500; background: <?php echo empty($r['is_active']) ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(148,163,184,0.15)'; ?>; box-shadow: none;" title="<?php echo empty($r['is_active']) ? 'คืนสถานะปฏิบัติงาน' : 'ทำเครื่องหมายพ้นสภาพ (ไม่ลบข้อมูล)'; ?>">
+                                        <i class="fa-solid <?php echo empty($r['is_active']) ? 'fa-user-check' : 'fa-user-slash'; ?>"></i>
                                     </a>
                                     <a href="researchers.php?delete=<?php echo $r['id']; ?><?php echo $filter_qs ? '&' . $filter_qs : ''; ?>" onclick="return confirm('ยืนยันลบนักวิจัยคนนี้? งานวิจัยที่ไม่มีผู้แต่งเชื่อมโยงเหลืออยู่จะถูกเคลียร์อัตโนมัติ')" class="btn-logout" style="padding: 6px 10px; font-size: 0.75rem; font-weight: 500; border-radius: 8px;" title="ลบรายชื่อ">
                                         <i class="fa-solid fa-trash"></i>
@@ -625,6 +668,14 @@ require_once __DIR__ . '/admin_header.php';
                     <input type="text" name="google_scholar_id" class="search-input" style="padding: 7px 10px;" value="<?php echo htmlspecialchars($edit_r['google_scholar_id'] ?? ''); ?>" placeholder="_jxhdJgAAAAJ">
                 </div>
             </div>
+
+            <!-- RESEARCHER-05: active/inactive - inactive researchers are hidden
+                 from the public directory, but their old publications still
+                 count in faculty-wide statistics (not a delete). -->
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--color-text-muted); margin-top: 4px; cursor: pointer;">
+                <input type="checkbox" name="is_active" value="1" <?php echo (!$edit_mode || !empty($edit_r['is_active'])) ? 'checked' : ''; ?> style="width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer;">
+                ยังปฏิบัติงานอยู่ (แสดงในทำเนียบนักวิจัยสาธารณะ)
+            </label>
 
             <div style="display: flex; gap: 10px; margin-top: 6px;">
                 <button type="submit" name="save_researcher" class="btn-premium" style="flex: 1; padding: 11px; justify-content: center; font-size: 0.92rem; font-weight: 600;">

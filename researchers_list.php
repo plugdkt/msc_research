@@ -1,32 +1,67 @@
 <?php
 // researchers_list.php
-// Listing all researchers with department filters and search
+// Public researcher directory - filterable, sortable, paginated
 
 $current_page = 'researchers';
 $page_title = 'ทำเนียบนักวิจัย - MSC Research';
 
 require_once __DIR__ . '/includes/functions.php';
 
-$sort = isset($_GET['sort']) ? $_GET['sort'] : 'pubs';
-$researchers = get_all_researchers($pdo);
+$selected_dept = isset($_GET['dept']) ? trim($_GET['dept']) : '';
+$selected_type = isset($_GET['type']) ? trim($_GET['type']) : '';
+$sort = in_array($_GET['sort'] ?? '', ['pubs', 'citations', 'hindex']) ? $_GET['sort'] : 'pubs';
+// RESEARCHER-02: descending by default, ascending available via toggle
+$order = ($_GET['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+
+// RESEARCHER-03: paginate at 20 per page
+$limit = 20;
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+
 $departments = get_departments_summary($pdo);
 
-// Populate h-index on all researchers for sorting and display
+// RESEARCHER-05: get_all_researchers() defaults to active-only, which is
+// exactly what the public directory needs.
+$researchers = get_all_researchers($pdo);
+
+// Populate h-index (calculate_researcher_h_index also refreshes the stored
+// h_index_peak - this page load is the mechanism that keeps it current).
 foreach ($researchers as &$r) {
     $r['h_index'] = calculate_researcher_h_index($pdo, $r['id']);
 }
 unset($r);
 
-// Sort researchers array
-usort($researchers, function($a, $b) use ($sort) {
-    if ($sort === 'citations') {
-        return (int)$b['total_citations'] <=> (int)$a['total_citations'];
-    } elseif ($sort === 'hindex') {
-        return (int)$b['h_index'] <=> (int)$a['h_index'];
-    } else { // default 'pubs'
-        return (int)$b['pub_count'] <=> (int)$a['pub_count'];
-    }
+// RESEARCHER-01: filter by department and staff type
+if ($selected_dept !== '' || $selected_type !== '') {
+    $researchers = array_values(array_filter($researchers, function ($r) use ($selected_dept, $selected_type) {
+        if ($selected_dept !== '' && $r['department'] !== $selected_dept) return false;
+        if ($selected_type !== '' && ($r['researcher_type'] ?? 'สายวิชาการ') !== $selected_type) return false;
+        return true;
+    }));
+}
+
+// RESEARCHER-02: sort by pub count / citations / h-index, toggle asc/desc
+$sort_key = $sort === 'citations' ? 'total_citations' : ($sort === 'hindex' ? 'h_index' : 'pub_count');
+usort($researchers, function ($a, $b) use ($sort_key, $order) {
+    $diff = (int)$a[$sort_key] <=> (int)$b[$sort_key];
+    return $order === 'asc' ? $diff : -$diff;
 });
+
+// RESEARCHER-03: paginate
+$total_rows = count($researchers);
+$total_pages = max(1, (int)ceil($total_rows / $limit));
+$page = min($page, $total_pages);
+$offset = ($page - 1) * $limit;
+$page_researchers = array_slice($researchers, $offset, $limit);
+
+// Helper to build a query string with one or more params overridden
+function researchers_list_url($overrides) {
+    $params = array_merge($_GET, $overrides);
+    // Changing a filter/sort resets pagination
+    if (!isset($overrides['page'])) {
+        unset($params['page']);
+    }
+    return '?' . http_build_query($params);
+}
 
 include_once __DIR__ . '/includes/header.php';
 ?>
@@ -44,32 +79,22 @@ include_once __DIR__ . '/includes/header.php';
             <span>ตัวกรองข้อมูล</span>
             <i class="fa-solid fa-filter" style="color: var(--color-primary);"></i>
         </div>
-        
-        <!-- Search Input -->
-        <div class="filter-group">
-            <label class="filter-label">ค้นหานักวิจัย</label>
-            <div class="search-box">
-                <i class="fa-solid fa-user-search search-icon" style="top: 50%;"></i>
-                <input type="text" id="search-input" class="search-input" placeholder="พิมพ์ชื่อภาษาไทย หรือ อังกฤษ...">
-            </div>
-        </div>
-        
+
         <!-- Department Filters -->
         <div class="filter-group">
             <label class="filter-label">ภาควิชา</label>
             <ul class="dept-list">
                 <li class="dept-item">
-                    <button class="dept-btn active" data-dept="all">
+                    <a href="<?php echo researchers_list_url(['dept' => '']); ?>" class="dept-btn <?php echo $selected_dept === '' ? 'active' : ''; ?>">
                         <span>ทั้งหมด</span>
-                        <span class="dept-count"><?php echo count($researchers); ?></span>
-                    </button>
+                    </a>
                 </li>
                 <?php foreach ($departments as $dept): ?>
                     <li class="dept-item">
-                        <button class="dept-btn" data-dept="<?php echo htmlspecialchars($dept['department']); ?>">
+                        <a href="<?php echo researchers_list_url(['dept' => $dept['department']]); ?>" class="dept-btn <?php echo $selected_dept === $dept['department'] ? 'active' : ''; ?>">
                             <span><?php echo htmlspecialchars($dept['department']); ?></span>
                             <span class="dept-count"><?php echo $dept['count']; ?></span>
-                        </button>
+                        </a>
                     </li>
                 <?php endforeach; ?>
             </ul>
@@ -80,20 +105,17 @@ include_once __DIR__ . '/includes/header.php';
             <label class="filter-label">ประเภทบุคลากร</label>
             <ul class="type-list" style="list-style: none;">
                 <li class="type-item" style="margin-bottom: 8px;">
-                    <button class="dept-btn type-btn active" data-type="all" style="width: 100%; text-align: left; background: none; border: none; color: var(--color-text-muted); padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-smooth);">
+                    <a href="<?php echo researchers_list_url(['type' => '']); ?>" class="dept-btn" style="width: 100%; text-align: left; background: <?php echo $selected_type === '' ? 'var(--border-glass)' : 'none'; ?>; border: none; color: var(--color-text-main); padding: 8px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; text-decoration: none;">
                         <span>ทั้งหมด</span>
-                    </button>
+                    </a>
                 </li>
+                <?php foreach (['สายวิชาการ', 'สายสนับสนุน'] as $t): ?>
                 <li class="type-item" style="margin-bottom: 8px;">
-                    <button class="dept-btn type-btn" data-type="สายวิชาการ" style="width: 100%; text-align: left; background: none; border: none; color: var(--color-text-muted); padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-smooth);">
-                        <span>สายวิชาการ</span>
-                    </button>
+                    <a href="<?php echo researchers_list_url(['type' => $t]); ?>" class="dept-btn" style="width: 100%; text-align: left; background: <?php echo $selected_type === $t ? 'var(--border-glass)' : 'none'; ?>; border: none; color: var(--color-text-main); padding: 8px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; text-decoration: none;">
+                        <span><?php echo $t; ?></span>
+                    </a>
                 </li>
-                <li class="type-item" style="margin-bottom: 8px;">
-                    <button class="dept-btn type-btn" data-type="สายสนับสนุน" style="width: 100%; text-align: left; background: none; border: none; color: var(--color-text-muted); padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: var(--transition-smooth);">
-                        <span>สายสนับสนุน</span>
-                    </button>
-                </li>
+                <?php endforeach; ?>
             </ul>
         </div>
     </div>
@@ -105,27 +127,33 @@ include_once __DIR__ . '/includes/header.php';
             <h3 style="margin: 0; font-weight: 600;">
                 <i class="fa-solid fa-users" style="color: var(--color-accent); margin-right: 8px;"></i>
                 รายชื่อนักวิจัย
+                <span style="font-size: 0.8rem; font-weight: 400; color: var(--color-text-muted);">(<?php echo number_format($total_rows); ?> คน)</span>
             </h3>
-            <div style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem;">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; flex-wrap: wrap;">
                 <span style="color: var(--color-text-muted);">เรียงตาม:</span>
                 <div style="display: flex; background: rgba(120, 120, 120, 0.1); border: 1px solid var(--border-glass); border-radius: 8px; padding: 2px;">
-                    <a href="?sort=pubs" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; color: <?php echo $sort === 'pubs' ? 'var(--color-text-main)' : 'var(--color-text-muted)'; ?>; background: <?php echo $sort === 'pubs' ? 'var(--border-glass)' : 'transparent'; ?>; font-weight: <?php echo $sort === 'pubs' ? '600' : 'normal'; ?>; transition: all 0.2s;">ผลงานตีพิมพ์</a>
-                    <a href="?sort=citations" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; color: <?php echo $sort === 'citations' ? 'var(--color-text-main)' : 'var(--color-text-muted)'; ?>; background: <?php echo $sort === 'citations' ? 'var(--border-glass)' : 'transparent'; ?>; font-weight: <?php echo $sort === 'citations' ? '600' : 'normal'; ?>; transition: all 0.2s;">Citations</a>
-                    <a href="?sort=hindex" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; color: <?php echo $sort === 'hindex' ? 'var(--color-text-main)' : 'var(--color-text-muted)'; ?>; background: <?php echo $sort === 'hindex' ? 'var(--border-glass)' : 'transparent'; ?>; font-weight: <?php echo $sort === 'hindex' ? '600' : 'normal'; ?>; transition: all 0.2s;">h-index</a>
+                    <?php foreach (['pubs' => 'ผลงานตีพิมพ์', 'citations' => 'Citations', 'hindex' => 'h-index'] as $key => $label): ?>
+                        <a href="<?php echo researchers_list_url(['sort' => $key]); ?>" style="padding: 6px 12px; border-radius: 6px; text-decoration: none; color: <?php echo $sort === $key ? 'var(--color-text-main)' : 'var(--color-text-muted)'; ?>; background: <?php echo $sort === $key ? 'var(--border-glass)' : 'transparent'; ?>; font-weight: <?php echo $sort === $key ? '600' : 'normal'; ?>;"><?php echo $label; ?></a>
+                    <?php endforeach; ?>
                 </div>
+                <!-- RESEARCHER-02: ascending/descending toggle -->
+                <a href="<?php echo researchers_list_url(['order' => $order === 'asc' ? 'desc' : 'asc']); ?>" class="btn-premium" style="padding: 6px 12px; font-size: 0.8rem; box-shadow: none; text-decoration: none;" title="สลับลำดับ">
+                    <i class="fa-solid <?php echo $order === 'asc' ? 'fa-arrow-up-wide-short' : 'fa-arrow-down-wide-short'; ?>"></i>
+                    <?php echo $order === 'asc' ? 'น้อย → มาก' : 'มาก → น้อย'; ?>
+                </a>
             </div>
         </div>
 
         <div class="researchers-container">
-            <?php if (empty($researchers)): ?>
+            <?php if (empty($page_researchers)): ?>
                 <div class="glass-panel" style="padding: 40px; text-align: center; color: var(--color-text-muted);">
                     <i class="fa-solid fa-users-slash" style="font-size: 3rem; margin-bottom: 16px; display: block;"></i>
-                    ยังไม่มีรายชื่อนักวิจัยในระบบกรุณาเพิ่มข้อมูลนักวิจัยผ่านระบบ Admin
+                    ไม่พบนักวิจัยตามเงื่อนไขที่เลือก
                 </div>
             <?php else: ?>
                 <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
-                    <?php foreach ($researchers as $r): ?>
-                        <a href="profile.php?id=<?php echo $r['id']; ?>" class="glass-panel researcher-card searchable-item" data-dept="<?php echo htmlspecialchars($r['department']); ?>" data-type="<?php echo htmlspecialchars($r['researcher_type'] ?? 'สายวิชาการ'); ?>">
+                    <?php foreach ($page_researchers as $r): ?>
+                        <a href="profile.php?id=<?php echo $r['id']; ?>" class="glass-panel researcher-card">
                             <div class="researcher-avatar">
                                 <?php if (!empty($r['avatar_url'])): ?>
                                     <img src="<?php echo htmlspecialchars($r['avatar_url']); ?>" alt="avatar">
@@ -133,7 +161,7 @@ include_once __DIR__ . '/includes/header.php';
                                     <i class="fa-solid fa-user-tie"></i>
                                 <?php endif; ?>
                             </div>
-                            
+
                             <div class="researcher-info">
                                 <div class="researcher-name" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <span><?php echo htmlspecialchars(($r['title_th'] ?? '') . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']); ?></span>
@@ -149,7 +177,7 @@ include_once __DIR__ . '/includes/header.php';
                                 <div class="researcher-dept">
                                     <i class="fa-solid fa-building-columns"></i> <?php echo htmlspecialchars($r['department']); ?>
                                 </div>
-                                
+
                                 <div class="researcher-meta">
                                     <?php if (!empty($r['orcid_id'])): ?>
                                         <span class="badge badge-orcid">
@@ -168,7 +196,7 @@ include_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            
+
                             <div style="text-align: right; display: flex; flex-direction: column; justify-content: center; gap: 8px; border-left: 1px solid var(--border-glass); padding-left: 20px; min-width: 140px;">
                                 <div>
                                     <div style="font-size: 1.5rem; font-weight: 700; color: var(--color-primary); font-family: var(--font-eng); line-height: 1;">
@@ -192,62 +220,38 @@ include_once __DIR__ . '/includes/header.php';
                         </a>
                     <?php endforeach; ?>
                 </div>
+
+                <!-- Pagination Bar -->
+                <?php if ($total_pages > 1): ?>
+                    <div style="display: flex; justify-content: center; gap: 8px; margin-top: 30px; align-items: center; flex-wrap: wrap;">
+                        <?php if ($page > 1): ?>
+                            <a href="<?php echo researchers_list_url(['page' => $page - 1]); ?>" class="btn-premium" style="padding: 8px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); color: var(--color-text-main); box-shadow: none; font-size: 0.85rem; text-decoration: none;">
+                                <i class="fa-solid fa-chevron-left"></i> ย้อนกลับ
+                            </a>
+                        <?php endif; ?>
+
+                        <?php
+                        $start_page = max(1, $page - 2);
+                        $end_page = min($total_pages, $page + 2);
+                        for ($i = $start_page; $i <= $end_page; $i++):
+                            $is_active = ($i === $page);
+                        ?>
+                            <a href="<?php echo researchers_list_url(['page' => $i]); ?>" class="btn-premium" style="padding: 8px 14px; font-size: 0.85rem; font-family: var(--font-eng); font-weight: 600; box-shadow: none; text-decoration: none; <?php echo $is_active ? 'background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); border: none;' : 'background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); color: var(--color-text-main);'; ?>">
+                                <?php echo $i; ?>
+                            </a>
+                        <?php endfor; ?>
+
+                        <?php if ($page < $total_pages): ?>
+                            <a href="<?php echo researchers_list_url(['page' => $page + 1]); ?>" class="btn-premium" style="padding: 8px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); color: var(--color-text-main); box-shadow: none; font-size: 0.85rem; text-decoration: none;">
+                                ถัดไป <i class="fa-solid fa-chevron-right"></i>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const typeButtons = document.querySelectorAll('.type-btn');
-    const items = document.querySelectorAll('.searchable-item');
-    
-    // Store current active department and type
-    let activeDept = 'all';
-    let activeType = 'all';
-    
-    function applyFilters() {
-        items.forEach(item => {
-            const itemDept = item.getAttribute('data-dept');
-            const itemType = item.getAttribute('data-type');
-            
-            const matchDept = (activeDept === 'all' || itemDept === activeDept);
-            const matchType = (activeType === 'all' || itemType === activeType);
-            
-            if (matchDept && matchType) {
-                item.style.display = '';
-            } else {
-                item.style.display = 'none';
-            }
-        });
-    }
-    
-    // Override department buttons click behavior to combine with type filter
-    const deptButtons = document.querySelectorAll('.dept-btn:not(.type-btn)');
-    deptButtons.forEach(btn => {
-        // Clone and replace to remove default main.js listener
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        
-        newBtn.addEventListener('click', () => {
-            document.querySelectorAll('.dept-btn:not(.type-btn)').forEach(b => b.classList.remove('active'));
-            newBtn.classList.add('active');
-            activeDept = newBtn.getAttribute('data-dept');
-            applyFilters();
-        });
-    });
-    
-    // Setup type buttons click behavior
-    typeButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            typeButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            activeType = btn.getAttribute('data-type');
-            applyFilters();
-        });
-    });
-});
-</script>
 
 <?php
 include_once __DIR__ . '/includes/footer.php';

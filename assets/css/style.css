@@ -375,6 +375,7 @@ body.light-mode .hero h2 {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    text-decoration: none;
 }
 
 .dept-btn:hover, .dept-btn.active {

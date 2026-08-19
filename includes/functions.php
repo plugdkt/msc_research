@@ -310,15 +310,24 @@ function determine_author_role($author_string, $first_name_en, $last_name_en) {
 
 
 /**
- * Get list of all researchers with their publication counts
+ * Get list of researchers with their publication counts.
+ *
+ * RESEARCHER-05: inactive researchers are hidden from public-facing lists
+ * (the directory, dashboard "top researcher" spotlights) but their
+ * historical publications still count in faculty-wide aggregates - so
+ * $active_only defaults to true for those callers, and admin pages that
+ * need to see/manage everyone (admin/index.php, admin/import.php) pass
+ * false explicitly.
  */
-function get_all_researchers($pdo) {
+function get_all_researchers($pdo, $active_only = true) {
     try {
+        $where = $active_only ? "WHERE r.is_active = 1" : "";
         $stmt = $pdo->query("
             SELECT r.*, COUNT(rp.publication_id) as pub_count, SUM(p.citation_count) as total_citations
             FROM `researchers` r
             LEFT JOIN `researcher_publications` rp ON r.id = rp.researcher_id
             LEFT JOIN `publications` p ON rp.publication_id = p.id
+            {$where}
             GROUP BY r.id
             ORDER BY r.first_name_th ASC
         ");
