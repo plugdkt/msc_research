@@ -6,3 +6,7 @@ config.php
 *.docx
 ~$*
 .planning/research/.cache/
+
+# Production codebase merge (2026-08-19) — working/reference files not meant to be tracked
+/Q data.xlsx
+/scratch/
