@@ -1289,6 +1289,20 @@ function fetch_openalex_work_topics_with_retry($doi) {
  * @return array List of ['num','name','name_th','color','score','matched'] sorted by score descending, score > 0 only
  */
 /**
+ * Check whether an abstract string is genuine abstract text or merely a
+ * document-type placeholder (e.g. 'Article', 'Review', 'Book Chapter') left over
+ * from older sync code.
+ */
+function is_valid_abstract($text) {
+    if (empty($text)) return false;
+    $trimmed = trim((string)$text);
+    if (mb_strlen($trimmed) < 40) return false;
+    $placeholders = ['article', 'review', 'book chapter', 'conference paper', 'short survey', 'letter', 'editorial', 'note', 'erratum', 'data paper'];
+    if (in_array(mb_strtolower($trimmed), $placeholders)) return false;
+    return true;
+}
+
+/**
  * Resolves and returns the active SDG dictionary and its source metadata.
  * Prioritizes live dictionary from msc_sdgs (C:/inetpub/wwwroot/msc_sdgs/sdg_data.json),
  * falling back to the bundled copy (data/sdg_data.json) if unreadable.

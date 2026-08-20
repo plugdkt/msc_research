@@ -95,20 +95,23 @@ if ($action === 'process') {
         exit;
     }
 
-    if (empty($pub['abstract']) && empty($pub['keywords']) && !empty($pub['doi'])) {
-        $api_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : null;
+    // If publication lacks real abstract text or keywords, fetch on demand from Scopus API
+    if ((!is_valid_abstract($pub['abstract']) || empty($pub['keywords'])) && !empty($pub['doi'])) {
+        $api_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : (getenv('MSC_SCOPUS_API_KEY') ?: null);
         if ($api_key) {
             try {
                 $details = fetch_scopus_abstract_details_with_retry($pub['doi'], $api_key);
-                if (!empty($details['abstract']) || !empty($details['keywords'])) {
-                    $update = $pdo->prepare("UPDATE `publications` SET abstract = COALESCE(NULLIF(:abstract, ''), abstract), keywords = COALESCE(NULLIF(:keywords, ''), keywords) WHERE id = :id");
+                $has_new_abs = !empty($details['abstract']) && is_valid_abstract($details['abstract']);
+                $has_new_kw = !empty($details['keywords']);
+                if ($has_new_abs || $has_new_kw) {
+                    $update = $pdo->prepare("UPDATE `publications` SET abstract = :abstract, keywords = :keywords WHERE id = :id");
                     $update->execute([
-                        ':abstract' => $details['abstract'] ?? '',
-                        ':keywords' => $details['keywords'] ?? '',
+                        ':abstract' => $has_new_abs ? $details['abstract'] : (is_valid_abstract($pub['abstract']) ? $pub['abstract'] : ''),
+                        ':keywords' => $has_new_kw ? $details['keywords'] : ($pub['keywords'] ?? ''),
                         ':id' => $pub_id,
                     ]);
-                    $pub['abstract'] = $details['abstract'] ?? $pub['abstract'];
-                    $pub['keywords'] = $details['keywords'] ?? $pub['keywords'];
+                    if ($has_new_abs) $pub['abstract'] = $details['abstract'];
+                    if ($has_new_kw) $pub['keywords'] = $details['keywords'];
                 }
             } catch (Exception $e) {
                 // Non-fatal for the batch: leave this one Unclassified and

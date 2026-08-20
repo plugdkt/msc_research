@@ -41,23 +41,25 @@ if (!$pub) {
 
 $fetched_new_data = false;
 
-// Backfill abstract/keywords on demand if missing and we have a DOI to look
+// Backfill abstract/keywords on demand if missing/placeholder and we have a DOI to look
 // up - avoids a Scopus API call on every "Suggest SDGs" click once this has
 // run once for a given publication.
-if (empty($pub['abstract']) && empty($pub['keywords']) && !empty($pub['doi'])) {
+if ((!is_valid_abstract($pub['abstract']) || empty($pub['keywords'])) && !empty($pub['doi'])) {
     $api_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : (getenv('MSC_SCOPUS_API_KEY') ?: null);
     if ($api_key) {
         try {
             $details = fetch_scopus_abstract_details_with_retry($pub['doi'], $api_key);
-            if (!empty($details['abstract']) || !empty($details['keywords'])) {
-                $update = $pdo->prepare("UPDATE `publications` SET abstract = COALESCE(NULLIF(:abstract, ''), abstract), keywords = COALESCE(NULLIF(:keywords, ''), keywords) WHERE id = :id");
+            $has_new_abs = !empty($details['abstract']) && is_valid_abstract($details['abstract']);
+            $has_new_kw = !empty($details['keywords']);
+            if ($has_new_abs || $has_new_kw) {
+                $update = $pdo->prepare("UPDATE `publications` SET abstract = :abstract, keywords = :keywords WHERE id = :id");
                 $update->execute([
-                    ':abstract' => $details['abstract'] ?? '',
-                    ':keywords' => $details['keywords'] ?? '',
+                    ':abstract' => $has_new_abs ? $details['abstract'] : (is_valid_abstract($pub['abstract']) ? $pub['abstract'] : ''),
+                    ':keywords' => $has_new_kw ? $details['keywords'] : ($pub['keywords'] ?? ''),
                     ':id' => $pub_id,
                 ]);
-                $pub['abstract'] = $details['abstract'] ?? $pub['abstract'];
-                $pub['keywords'] = $details['keywords'] ?? $pub['keywords'];
+                if ($has_new_abs) $pub['abstract'] = $details['abstract'];
+                if ($has_new_kw) $pub['keywords'] = $details['keywords'];
                 $fetched_new_data = true;
             }
         } catch (Exception $e) {
