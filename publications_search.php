@@ -131,9 +131,9 @@ $total_pages = ceil($total_rows / $limit);
 // Fetch page results
 $sql = "
     SELECT p.*, 
-           GROUP_CONCAT(DISTINCT CONCAT(r.title_th, ' ', r.first_name_th, ' ', r.last_name_th, '||', r.first_name_en, '||', r.last_name_en) SEPARATOR '|||') AS linked_researchers,
+           GROUP_CONCAT(DISTINCT CONCAT(COALESCE(CONCAT(r.title_th, ' '), ''), COALESCE(r.first_name_th, ''), ' ', COALESCE(r.last_name_th, ''), '||', COALESCE(r.first_name_en, ''), '||', COALESCE(r.last_name_en, '')) SEPARATOR '|||') AS linked_researchers,
            GROUP_CONCAT(DISTINCT r.department SEPARATOR '||') AS departments,
-           CONCAT(ca.title_th, ca.first_name_th, ' ', ca.last_name_th) as corresponding_author_name
+           CONCAT(COALESCE(ca.title_th, ''), COALESCE(ca.first_name_th, ''), ' ', COALESCE(ca.last_name_th, '')) as corresponding_author_name
     FROM publications p
     LEFT JOIN researcher_publications rp ON p.id = rp.publication_id
     LEFT JOIN researchers r ON rp.researcher_id = r.id

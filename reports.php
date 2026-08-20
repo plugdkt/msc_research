@@ -376,7 +376,7 @@ $quartile_where = !empty($quartile_pub_conditions) ? "WHERE " . implode(" AND ",
 
 $stmtAllPubs = $pdo->prepare("
     SELECT p.id, p.title, p.authors, p.journal_name, p.publish_year, p.doi, p.url, p.quartile, p.source, p.citation_count, p.countries, p.funding_sponsor, p.funding_no, p.funding_amount, p.sdg_primary, p.sdg_secondary, p.sdg_tertiary, p.sdg_rationale, p.rcr, p.nih_percentile,
-           GROUP_CONCAT(DISTINCT CONCAT(r2.title_th, ' ', r2.first_name_th, ' ', r2.last_name_th, '||', r2.first_name_en, '||', r2.last_name_en) SEPARATOR '|||') AS linked_researchers
+           GROUP_CONCAT(DISTINCT CONCAT(COALESCE(CONCAT(r2.title_th, ' '), ''), COALESCE(r2.first_name_th, ''), ' ', COALESCE(r2.last_name_th, ''), '||', COALESCE(r2.first_name_en, ''), '||', COALESCE(r2.last_name_en, '')) SEPARATOR '|||') AS linked_researchers
     FROM researcher_publications rp
     JOIN researchers r ON rp.researcher_id = r.id
     JOIN publications p ON rp.publication_id = p.id

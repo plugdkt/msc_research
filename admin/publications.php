@@ -179,8 +179,8 @@ try {
     
     $stmt = $pdo->prepare("
         SELECT p.*, 
-               GROUP_CONCAT(CONCAT(r.title_th, r.first_name_th, ' ', r.last_name_th) SEPARATOR ', ') as linked_researchers,
-               CONCAT(ca.title_th, ca.first_name_th, ' ', ca.last_name_th) as corresponding_author_name
+               GROUP_CONCAT(CONCAT(COALESCE(r.title_th, ''), COALESCE(r.first_name_th, ''), ' ', COALESCE(r.last_name_th, '')) SEPARATOR ', ') as linked_researchers,
+               CONCAT(COALESCE(ca.title_th, ''), COALESCE(ca.first_name_th, ''), ' ', COALESCE(ca.last_name_th, '')) as corresponding_author_name
         FROM `publications` p
         LEFT JOIN `researcher_publications` rp ON p.id = rp.publication_id
         LEFT JOIN `researchers` r ON rp.researcher_id = r.id
