@@ -1015,6 +1015,143 @@ function fetch_scopus_abstract_details_with_retry($doi, $api_key) {
 }
 
 /**
+ * Phase 9 (Auto-Quartile): fetch a journal's CiteScore Quartile from the
+ * Scopus Serial Title API by ISSN, using the `view=CITESCORE` parameter -
+ * the plain STANDARD/ENHANCED views only return raw SJR/CiteScore numbers,
+ * not the per-subject percentile that quartile is actually derived from
+ * (verified live against multiple real ISSNs, including The Lancet, before
+ * this was written - see .planning/ROADMAP.md Phase 9 for the walkthrough).
+ *
+ * Quartile is computed from CiteScore Percentile using Elsevier's own
+ * published formula (Q1 >=75th percentile, Q2 >=50th, Q3 >=25th, Q4 below) -
+ * not an invented heuristic. A journal can carry a different percentile per
+ * ASJC subject area it's classified under; this takes the highest
+ * percentile across all of them (most favorable quartile), matching how
+ * `journal_quartiles` stores one quartile per journal, not per subject.
+ * Leadership decision (2026-08-20): this replaces SCImago/SJR quartile as
+ * the faculty's sole quartile source going forward.
+ *
+ * @return ?array{title: ?string, quartile: ?string, percentile: ?float, citescore: ?float, year: ?string}
+ *   null if the ISSN isn't found in Scopus at all; quartile/percentile/citescore
+ *   individually null if found but CiteScore hasn't been computed for it yet
+ *   (e.g. a brand new journal with no citation history)
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException
+ */
+function fetch_scopus_citescore_quartile($issn) {
+    $clean_issn = preg_replace('/[^0-9Xx]/', '', (string)$issn);
+    if (strlen($clean_issn) < 8) {
+        return null;
+    }
+
+    $api_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : null;
+    if (empty($api_key)) {
+        throw new RuntimeException('ไม่พบ Scopus API Key');
+    }
+
+    $url = "https://api.elsevier.com/content/serial/title/issn/" . urlencode($clean_issn) . "?view=CITESCORE";
+    $data = http_get_json($url, ["X-ELS-APIKey: {$api_key}"], 10);
+
+    $entry = $data['serial-metadata-response']['entry'][0] ?? null;
+    if (!$entry) {
+        return null;
+    }
+
+    $title = $entry['dc:title'] ?? null;
+    $years = $entry['citeScoreYearInfoList']['citeScoreYearInfo'] ?? [];
+
+    // Prefer the most recent year with @status "Complete" - the current
+    // year is normally "In-Progress" (provisional, still accumulating
+    // citations), so basing quartile on it would understate true standing.
+    // Fall back to whatever's first (newest) if no Complete year exists yet
+    // (e.g. a journal added to Scopus this year).
+    $chosen = null;
+    foreach ($years as $y) {
+        if (($y['@status'] ?? '') === 'Complete') {
+            $chosen = $y;
+            break;
+        }
+    }
+    if (!$chosen && !empty($years)) {
+        $chosen = $years[0];
+    }
+    if (!$chosen) {
+        return ['title' => $title, 'quartile' => null, 'percentile' => null, 'citescore' => null, 'year' => null];
+    }
+
+    $info = $chosen['citeScoreInformationList'][0]['citeScoreInfo'][0] ?? null;
+    $citescore = isset($info['citeScore']) ? (float)$info['citeScore'] : null;
+
+    $best_percentile = null;
+    foreach (($info['citeScoreSubjectRank'] ?? []) as $sr) {
+        if (!isset($sr['percentile'])) {
+            continue;
+        }
+        $p = (float)$sr['percentile'];
+        if ($best_percentile === null || $p > $best_percentile) {
+            $best_percentile = $p;
+        }
+    }
+
+    $quartile = null;
+    if ($best_percentile !== null) {
+        if ($best_percentile >= 75) {
+            $quartile = 'Q1';
+        } elseif ($best_percentile >= 50) {
+            $quartile = 'Q2';
+        } elseif ($best_percentile >= 25) {
+            $quartile = 'Q3';
+        } else {
+            $quartile = 'Q4';
+        }
+    }
+
+    return [
+        'title' => $title,
+        'quartile' => $quartile,
+        'percentile' => $best_percentile,
+        'citescore' => $citescore,
+        'year' => isset($chosen['@year']) ? (string)$chosen['@year'] : null,
+    ];
+}
+
+/**
+ * fetch_scopus_citescore_quartile() wrapped with the same retry contract as
+ * the rest of this file's external fetchers. A 404 (ISSN not in Scopus at
+ * all) is graceful absence, not an error.
+ *
+ * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ */
+function fetch_scopus_citescore_quartile_with_retry($issn) {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_scopus_citescore_quartile($issn);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[scopus][citescore] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[scopus][citescore] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiHttpException $e) {
+            if ($e->httpCode === 404) {
+                return null;
+            }
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException(
+        "Scopus CiteScore fetch failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
+}
+
+/**
  * Phase 7 (RCR-01): resolve a publication's DOI to its PubMed ID (PMID) via
  * NCBI's ESearch E-utility against the `pubmed` database directly. This is
  * a hard prerequisite for the NIH iCite RCR lookup below - iCite is
