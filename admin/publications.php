@@ -375,7 +375,7 @@ try {
                     <small style="color: var(--color-text-muted); display: block; margin-top: 6px;">
                         แปลง DOI เป็น PubMed ID แล้วดึงค่า Relative Citation Ratio จาก NIH iCite โดยอัตโนมัติ — ผลงานที่ไม่ได้อยู่ใน PubMed จะไม่มีค่านี้ (ข้อจำกัดของ PubMed เอง)
                         <?php if (!empty($edit_pub['rcr'])): ?>
-                            <br>ค่าปัจจุบัน: <strong>RCR <?php echo number_format((float)$edit_pub['rcr'], 2); ?></strong><?php echo $edit_pub['nih_percentile'] !== null ? ' (เปอร์เซ็นไทล์ ' . number_format((float)$edit_pub['nih_percentile'], 1) . ')' : ''; ?>
+                            <br>ค่าปัจจุบัน: <strong>RCR <?php echo number_format((float)$edit_pub['rcr'], 2); ?></strong><?php echo $edit_pub['nih_percentile'] !== null ? ' (เปอร์เซ็นไทล์ ' . number_format((float)$edit_pub['nih_percentile'], 1) . ')' : ' <span class="badge" style="font-size:0.7rem; background:rgba(251,191,36,0.1); color:#fbbf24; border:1px solid rgba(251,191,36,0.3); padding:1px 5px; border-radius:3px;">รอสรุปเปอร์เซ็นไทล์สิ้นปี (Provisional)</span>'; ?>
                         <?php endif; ?>
                     </small>
                     <div id="fetch-rcr-status" style="font-size: 0.82rem; margin-top: 8px;"></div>

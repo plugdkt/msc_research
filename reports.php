@@ -915,9 +915,15 @@ include_once __DIR__ . '/includes/header.php';
                                 </span>
                             </td>
                             <td style="padding: 12px 14px; text-align: right; vertical-align: middle;">
-                                <span style="font-family: var(--font-eng); font-size: 0.88rem; color: var(--color-text-muted);">
-                                    <?php echo $rp['nih_percentile'] !== null ? number_format((float)$rp['nih_percentile'], 1) . '%' : '-'; ?>
-                                </span>
+                                <?php if ($rp['nih_percentile'] !== null): ?>
+                                    <span style="font-family: var(--font-eng); font-weight: 600; font-size: 0.95rem; color: #10b981;">
+                                        <?php echo number_format((float)$rp['nih_percentile'], 1); ?>%
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge" title="อยู่ระหว่างรอ NIH iCite ปิดรอบสรุปเปอร์เซ็นไทล์ประจำปี (Provisional)" style="font-size: 0.72rem; background: rgba(251, 191, 36, 0.1); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); padding: 2px 7px; border-radius: 4px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                        <i class="fa-solid fa-clock-rotate-left" style="font-size: 0.65rem;"></i> รอสรุปสิ้นปี
+                                    </span>
+                                <?php endif; ?>
                             </td>
                         </tr>
                         <?php 
