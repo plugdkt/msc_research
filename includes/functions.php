@@ -1007,6 +1007,177 @@ function fetch_scopus_abstract_details_with_retry($doi, $api_key) {
 }
 
 /**
+ * Phase 7 (RCR-01): resolve a publication's DOI to its PubMed ID (PMID) via
+ * NCBI's ESearch E-utility against the `pubmed` database directly. This is
+ * a hard prerequisite for the NIH iCite RCR lookup below - iCite is
+ * PMID-only, there is no DOI lookup path.
+ *
+ * Deliberately NOT the PMC ID Converter (`pmc/utils/idconv`), despite that
+ * looking like the obvious "ID converter" tool: idconv only resolves
+ * articles deposited in PMC (PubMed Central's full-text archive), and
+ * returns "not found" for the large fraction of PubMed-indexed articles
+ * that have a PMID but were never deposited in PMC - verified against a
+ * real DOI where idconv said "Identifier not found in PMC" while esearch
+ * correctly found its PMID. ESearch searches PubMed's own metadata
+ * (including its DOI field via `[doi]`), so it covers everything with a
+ * PMID, not just the PMC subset.
+ *
+ * @return ?string the resolved PMID, or null if not found (no DOI, or the
+ *   DOI isn't indexed in PubMed at all - common, since PubMed only covers
+ *   biomedical/health literature, so non-MEDLINE-indexed journals
+ *   genuinely have no PMID)
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException
+ */
+function fetch_pmid_from_doi($doi) {
+    if (empty($doi)) {
+        return null;
+    }
+
+    $params = [
+        'db' => 'pubmed',
+        'term' => $doi . '[doi]',
+        'retmode' => 'json',
+        'tool' => 'msc_research',
+        'email' => 'msc_research@up.ac.th',
+    ];
+    $url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?" . http_build_query($params);
+
+    $data = http_get_json($url, [], 10);
+
+    $ids = $data['esearchresult']['idlist'] ?? [];
+    if (empty($ids)) {
+        return null;
+    }
+    return (string)$ids[0];
+}
+
+/**
+ * fetch_pmid_from_doi() wrapped with the same SYNC-01/02-style retry
+ * contract used elsewhere (timeout: 3x with 5s/15s/45s backoff; 429: wait
+ * per header or 60s fallback). A 404 is graceful absence (RCR-04), not an
+ * error - returns null so the caller can mark this publication "checked,
+ * no PMID" rather than fail the batch.
+ *
+ * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ */
+function fetch_pmid_from_doi_with_retry($doi) {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_pmid_from_doi($doi);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[ncbi][idconv] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[ncbi][idconv] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiHttpException $e) {
+            if ($e->httpCode === 404) {
+                return null;
+            }
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException(
+        "NCBI ID Converter fetch failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
+}
+
+/**
+ * Phase 7 (RCR-02): fetch the Relative Citation Ratio and NIH percentile
+ * for a PMID from the NIH iCite API.
+ *
+ * @return array{rcr: ?float, nih_percentile: ?float}
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException
+ */
+function fetch_icite_rcr($pmid) {
+    if (empty($pmid)) {
+        return ['rcr' => null, 'nih_percentile' => null];
+    }
+
+    $url = "https://icite.od.nih.gov/api/pubs?pmids=" . urlencode($pmid);
+    $data = http_get_json($url, [], 10);
+
+    $record = $data['data'][0] ?? null;
+    if (!$record) {
+        // iCite returns an empty `data` array (not a 404) for a PMID it
+        // has no record for.
+        return ['rcr' => null, 'nih_percentile' => null];
+    }
+
+    return [
+        'rcr' => isset($record['relative_citation_ratio']) ? (float)$record['relative_citation_ratio'] : null,
+        'nih_percentile' => isset($record['nih_percentile']) ? (float)$record['nih_percentile'] : null,
+    ];
+}
+
+/**
+ * fetch_icite_rcr() wrapped with the same retry contract as the rest of
+ * this file's external fetchers.
+ *
+ * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ */
+function fetch_icite_rcr_with_retry($pmid) {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_icite_rcr($pmid);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[icite][rcr] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[icite][rcr] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiHttpException $e) {
+            if ($e->httpCode === 404) {
+                return ['rcr' => null, 'nih_percentile' => null];
+            }
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException(
+        "NIH iCite fetch failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
+}
+
+/**
+ * Phase 7 (RCR-05): render a small badge showing a publication's Relative
+ * Citation Ratio (+ NIH percentile if available). Returns '' if no RCR is
+ * stored (RCR-04: graceful absence - callers simply don't show a badge
+ * rather than showing an empty/placeholder one).
+ *
+ * Color follows NIH's own framing of RCR: 1.0 is the field-normalized
+ * benchmark (an "average" NIH-funded paper in the same field/year), so
+ * >=1.0 reads as at-or-above benchmark (green) and below reads amber.
+ */
+function render_rcr_badge($rcr, $percentile = null, $font_size = '0.72rem') {
+    if ($rcr === null || $rcr === '') {
+        return '';
+    }
+    $rcr_val = (float)$rcr;
+    $color = $rcr_val >= 1.0 ? '#10b981' : '#f59e0b';
+    $percentile_suffix = ($percentile !== null && $percentile !== '') ? (' · เปอร์เซ็นไทล์ ' . round((float)$percentile)) : '';
+
+    return '<span class="badge" title="Relative Citation Ratio (NIH iCite)" style="font-size: ' . $font_size . '; background: ' . $color . '22; color: ' . $color . '; border: 1px solid ' . $color . '55; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px;">'
+        . '<i class="fa-solid fa-chart-line" style="font-size: 0.85em;"></i> RCR ' . number_format($rcr_val, 2) . htmlspecialchars($percentile_suffix)
+        . '</span>';
+}
+
+/**
  * Phase 8 (Topic Prominence & Trends): resolve a publication's OpenAlex
  * work record by DOI and extract its topic classification.
  *

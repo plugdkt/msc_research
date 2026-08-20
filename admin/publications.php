@@ -368,6 +368,19 @@ try {
                     <div id="suggest-sdg-results" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
 
+                <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; padding: 14px;">
+                    <button type="button" id="fetch-rcr-btn" class="btn-premium" style="padding: 8px 14px; font-size: 0.85rem;" data-pub-id="<?php echo (int)$edit_pub['id']; ?>">
+                        <i class="fa-solid fa-chart-line"></i> ดึงค่า RCR (NIH iCite)
+                    </button>
+                    <small style="color: var(--color-text-muted); display: block; margin-top: 6px;">
+                        แปลง DOI เป็น PubMed ID แล้วดึงค่า Relative Citation Ratio จาก NIH iCite โดยอัตโนมัติ — ผลงานที่ไม่ได้อยู่ใน PubMed จะไม่มีค่านี้ (ข้อจำกัดของ PubMed เอง)
+                        <?php if (!empty($edit_pub['rcr'])): ?>
+                            <br>ค่าปัจจุบัน: <strong>RCR <?php echo number_format((float)$edit_pub['rcr'], 2); ?></strong><?php echo $edit_pub['nih_percentile'] !== null ? ' (เปอร์เซ็นไทล์ ' . number_format((float)$edit_pub['nih_percentile'], 1) . ')' : ''; ?>
+                        <?php endif; ?>
+                    </small>
+                    <div id="fetch-rcr-status" style="font-size: 0.82rem; margin-top: 8px;"></div>
+                </div>
+
                 <div>
                     <label style="font-size: 0.8rem; color: var(--color-primary); display: block; margin-bottom: 5px; font-weight: 600;"><i class="fa-solid fa-link"></i> ลิงก์ปลายทางงานวิจัย (URL)</label>
                     <input type="url" name="url" class="search-input" style="padding: 8px 12px; border-color: rgba(255, 215, 0, 0.4);" value="<?php echo htmlspecialchars($edit_pub['url'] ?? ''); ?>" placeholder="https://...">
@@ -619,6 +632,37 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .finally(() => { btn.disabled = false; });
     });
+
+    // Phase 7 (RCR-06 secondary mechanism): on-demand fetch for the one
+    // publication currently being edited - hits the same
+    // admin/fetch_rcr.php?action=process endpoint the batch tool uses.
+    const rcrBtn = document.getElementById('fetch-rcr-btn');
+    if (rcrBtn) {
+        const rcrStatusEl = document.getElementById('fetch-rcr-status');
+        rcrBtn.addEventListener('click', () => {
+            rcrBtn.disabled = true;
+            rcrStatusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังดึงข้อมูล...';
+            fetch('fetch_rcr.php?action=process&id=' + encodeURIComponent(rcrBtn.dataset.pubId))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        rcrStatusEl.innerHTML = '<span style="color:#f87171;">' + escapeHtml(data.error) + '</span>';
+                        return;
+                    }
+                    if (data.status === 'applied') {
+                        rcrStatusEl.innerHTML = '<span style="color:#10b981;">สำเร็จ: RCR ' + data.rcr + (data.nih_percentile !== null ? ' (เปอร์เซ็นไทล์ ' + data.nih_percentile + ')' : '') + ' — บันทึกแล้ว รีเฟรชหน้าเพื่อดูค่าล่าสุด</span>';
+                    } else if (data.status === 'no_match' || data.status === 'skipped') {
+                        rcrStatusEl.innerHTML = '<span style="color:var(--color-text-muted);">' + escapeHtml(data.reason || 'ไม่พบข้อมูล') + '</span>';
+                    } else {
+                        rcrStatusEl.innerHTML = '<span style="color:#f87171;">' + escapeHtml(data.reason || 'เกิดข้อผิดพลาด') + '</span>';
+                    }
+                })
+                .catch(() => {
+                    rcrStatusEl.innerHTML = '<span style="color:#f87171;">เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่</span>';
+                })
+                .finally(() => { rcrBtn.disabled = false; });
+        });
+    }
 });
 </script>
 <?php endif; ?>

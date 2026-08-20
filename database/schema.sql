@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS `publications` (
     `publish_year` INT NOT NULL,
     `publish_date` DATE NULL,
     `doi` VARCHAR(150) UNIQUE NULL,
+    `pmid` VARCHAR(20) NULL, -- Phase 7: resolved PubMed ID (via NCBI ID Converter), prerequisite for NIH iCite RCR lookup
+    `rcr` DECIMAL(10,4) NULL, -- Phase 7: NIH iCite Relative Citation Ratio
+    `nih_percentile` DECIMAL(5,2) NULL, -- Phase 7: NIH iCite percentile rank
+    `rcr_checked_at` TIMESTAMP NULL, -- Phase 7: when PMID/RCR resolution was last attempted for this publication
     `citation_count` INT DEFAULT 0,
     `source` VARCHAR(50) NOT NULL, -- 'orcid', 'pubmed', 'scopus', 'google_scholar', 'manual'
     `source_id` VARCHAR(100) NULL,

@@ -322,6 +322,7 @@ include_once __DIR__ . '/includes/header.php';
                                 <?php if (!empty($pub['sdg_tertiary'])): ?>
                                     <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.72rem'); ?>
                                 <?php endif; ?>
+                                <?php echo render_rcr_badge($pub['rcr'] ?? null, $pub['nih_percentile'] ?? null, '0.72rem'); ?>
                             </div>
                             <?php if ($pub['citation_count'] > 0): ?>
                                 <span class="pub-citations">

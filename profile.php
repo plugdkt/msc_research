@@ -262,6 +262,7 @@ include_once __DIR__ . '/includes/header.php';
                                 <?php if (!empty($pub['sdg_tertiary'])): ?>
                                     <?php echo render_sdg_badge($pub['sdg_tertiary'], false); ?>
                                 <?php endif; ?>
+                                <?php echo render_rcr_badge($pub['rcr'] ?? null, $pub['nih_percentile'] ?? null); ?>
                             </div>
                             
                             <div style="display: flex; gap: 15px; align-items: center;">

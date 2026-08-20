@@ -375,7 +375,7 @@ if ($selected_year !== '') {
 $quartile_where = !empty($quartile_pub_conditions) ? "WHERE " . implode(" AND ", $quartile_pub_conditions) : "";
 
 $stmtAllPubs = $pdo->prepare("
-    SELECT p.id, p.title, p.authors, p.journal_name, p.publish_year, p.doi, p.url, p.quartile, p.source, p.citation_count, p.countries, p.funding_sponsor, p.funding_no, p.funding_amount, p.sdg_primary, p.sdg_secondary, p.sdg_tertiary, p.sdg_rationale,
+    SELECT p.id, p.title, p.authors, p.journal_name, p.publish_year, p.doi, p.url, p.quartile, p.source, p.citation_count, p.countries, p.funding_sponsor, p.funding_no, p.funding_amount, p.sdg_primary, p.sdg_secondary, p.sdg_tertiary, p.sdg_rationale, p.rcr, p.nih_percentile,
            GROUP_CONCAT(DISTINCT CONCAT(r2.title_th, ' ', r2.first_name_th, ' ', r2.last_name_th, '||', r2.first_name_en, '||', r2.last_name_en) SEPARATOR '|||') AS linked_researchers
     FROM researcher_publications rp
     JOIN researchers r ON rp.researcher_id = r.id
@@ -568,6 +568,27 @@ foreach ($top_fields_for_trend as $tf_field) {
     }
     $topic_trend_datasets[] = ['label' => $tf_field, 'data' => $series];
 }
+
+// Phase 7 (RCR-05): aggregate Relative Citation Ratio across the currently
+// filtered publication set, for the Reports-page display location. Only
+// publications with a resolved RCR contribute to the average - RCR-04's
+// graceful absence applies here too (no RCR is excluded, not treated as 0).
+$rcr_values = [];
+foreach ($filtered_publications as $pub) {
+    if ($pub['rcr'] !== null && $pub['rcr'] !== '') {
+        $rcr_values[] = (float)$pub['rcr'];
+    }
+}
+$rcr_covered_count = count($rcr_values);
+$rcr_average = $rcr_covered_count > 0 ? array_sum($rcr_values) / $rcr_covered_count : null;
+
+$rcr_top_publications = array_filter($filtered_publications, function ($p) {
+    return $p['rcr'] !== null && $p['rcr'] !== '';
+});
+usort($rcr_top_publications, function ($a, $b) {
+    return (float)$b['rcr'] <=> (float)$a['rcr'];
+});
+$rcr_top_publications = array_slice($rcr_top_publications, 0, 10);
 
 include_once __DIR__ . '/includes/header.php';
 ?>
@@ -780,6 +801,53 @@ include_once __DIR__ . '/includes/header.php';
         <div style="position: relative; height: 350px; width: 100%;">
             <canvas id="yearlyMixedChart"></canvas>
         </div>
+    </div>
+
+    <div class="glass-panel" style="padding: 30px; margin-bottom: 30px;">
+        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chart-line" style="color: #10b981;"></i> Relative Citation Ratio (RCR) — NIH iCite
+        </h3>
+        <?php if ($rcr_covered_count === 0): ?>
+            <p style="font-size: 0.85rem; color: var(--color-text-muted);">ยังไม่มีข้อมูล RCR ในตัวกรองปัจจุบัน — ผู้ดูแลระบบยังไม่ได้ดึงข้อมูล หรือผลงานในขอบเขตนี้ไม่มีค่า RCR</p>
+        <?php else: ?>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">RCR เฉลี่ย</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng); color: #10b981;"><?php echo number_format($rcr_average, 2); ?></div>
+                </div>
+                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่มีค่า RCR</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($rcr_covered_count); ?> / <?php echo number_format(count($filtered_publications)); ?></div>
+                </div>
+            </div>
+            <h4 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 10px;">10 อันดับผลงานที่มีค่า RCR สูงสุด</h4>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-glass); color: var(--color-text-muted);">
+                            <th style="padding: 8px;">ชื่อเรื่อง</th>
+                            <th style="padding: 8px; text-align: right;">RCR</th>
+                            <th style="padding: 8px; text-align: right;">เปอร์เซ็นไทล์</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($rcr_top_publications as $rp): ?>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 8px;">
+                                <?php if (!empty($rp['url'])): ?>
+                                    <a href="<?php echo htmlspecialchars($rp['url']); ?>" target="_blank" style="color: var(--color-text-main); text-decoration: none;"><?php echo htmlspecialchars(mb_strimwidth($rp['title'], 0, 90, '...')); ?></a>
+                                <?php else: ?>
+                                    <?php echo htmlspecialchars(mb_strimwidth($rp['title'], 0, 90, '...')); ?>
+                                <?php endif; ?>
+                            </td>
+                            <td style="padding: 8px; text-align: right; font-family: var(--font-eng); font-weight: 700; color: #10b981;"><?php echo number_format((float)$rp['rcr'], 2); ?></td>
+                            <td style="padding: 8px; text-align: right; font-family: var(--font-eng); color: var(--color-text-muted);"><?php echo $rp['nih_percentile'] !== null ? number_format((float)$rp['nih_percentile'], 1) : '-'; ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin-bottom: 30px;">
