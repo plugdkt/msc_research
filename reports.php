@@ -804,9 +804,26 @@ include_once __DIR__ . '/includes/header.php';
     </div>
 
     <div class="glass-panel" style="padding: 30px; margin-bottom: 30px;">
-        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+        <h3 style="margin-bottom: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
             <i class="fa-solid fa-chart-line" style="color: #10b981;"></i> Relative Citation Ratio (RCR) — NIH iCite
         </h3>
+
+        <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.83rem; line-height: 1.6; color: var(--color-text-muted);">
+            <div style="font-weight: 600; color: var(--color-text-main); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-circle-info" style="color: #10b981;"></i>
+                <span>ความหมายและการแปลผลค่า RCR (Relative Citation Ratio)</span>
+            </div>
+            <p style="margin: 0 0 6px 0;">
+                <strong>RCR</strong> เป็นดัชนีชี้วัดผลกระทบเชิงวิชาการระดับบทความ พัฒนาโดย <strong>สถาบันสุขภาพแห่งชาติ สหรัฐอเมริกา (National Institutes of Health — NIH)</strong> ผ่านฐานข้อมูล <a href="https://icite.od.nih.gov" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline;">NIH iCite</a> ซึ่งคำนวณจากการอ้างอิงของบทความเทียบกับเครือข่ายงานวิจัยในสาขาเดียวกัน (Field-Normalized &amp; Time-Normalized)
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; font-size: 0.78rem; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08);">
+                <span><strong style="color: #10b981;">• RCR = 1.0 :</strong> ค่าเฉลี่ยมาตรฐานโลกในสาขาเดียวกัน</span>
+                <span><strong style="color: #10b981;">• RCR &gt; 1.0 :</strong> ได้รับการอ้างอิงสูงกว่าเกณฑ์เฉลี่ยโลก (เช่น 2.0 = สูงกว่า 2 เท่า)</span>
+                <span><strong style="color: #f59e0b;">• RCR &lt; 1.0 :</strong> ได้รับการอ้างอิงต่ำกว่าเกณฑ์เฉลี่ยโลก</span>
+                <span><strong style="color: #60a5fa;">• เปอร์เซ็นไทล์ (NIH Percentile) :</strong> อันดับเทียบกับงานวิจัยสาขาเดียวกันทั่วโลก (เช่น 80th = กลุ่ม Top 20% ของโลก)</span>
+            </div>
+        </div>
+
         <?php if ($rcr_covered_count === 0): ?>
             <p style="font-size: 0.85rem; color: var(--color-text-muted);">ยังไม่มีข้อมูล RCR ในตัวกรองปัจจุบัน — ผู้ดูแลระบบยังไม่ได้ดึงข้อมูล หรือผลงานในขอบเขตนี้ไม่มีค่า RCR</p>
         <?php else: ?>
