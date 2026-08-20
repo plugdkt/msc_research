@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS `publications` (
     `url` VARCHAR(255) NULL,
     `abstract` TEXT NULL,
     `keywords` TEXT NULL, -- Phase 6: author keywords from Scopus Abstract Retrieval API, for SDG keyword matching
+    `openalex_id` VARCHAR(100) NULL, -- Phase 8: resolved OpenAlex work ID (NULL = not yet attempted or no match found)
+    `openalex_checked_at` TIMESTAMP NULL, -- Phase 8: when OpenAlex resolution was last attempted for this publication
     `sdg_primary` VARCHAR(50) NULL,
     `sdg_secondary` VARCHAR(50) NULL,
     `sdg_tertiary` VARCHAR(50) NULL,
@@ -61,6 +63,23 @@ CREATE TABLE IF NOT EXISTS `researcher_publications` (
     PRIMARY KEY (`researcher_id`, `publication_id`),
     FOREIGN KEY (`researcher_id`) REFERENCES `researchers`(`id`) ON DELETE CASCADE,
     FOREIGN KEY (`publication_id`) REFERENCES `publications`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `publication_topics` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `publication_id` INT NOT NULL,
+    `topic_id` VARCHAR(100) NOT NULL,
+    `display_name` VARCHAR(255) NOT NULL,
+    `subfield` VARCHAR(255) NULL,
+    `field` VARCHAR(255) NULL,
+    `domain` VARCHAR(255) NULL,
+    `score` DECIMAL(6,4) NULL,
+    `is_primary` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`publication_id`) REFERENCES `publications`(`id`) ON DELETE CASCADE,
+    INDEX `idx_publication_id` (`publication_id`),
+    INDEX `idx_field` (`field`),
+    INDEX `idx_domain` (`domain`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `users` (

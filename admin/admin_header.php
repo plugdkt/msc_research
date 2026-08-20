@@ -137,7 +137,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                 </a>
                 
                 <div class="nav-dropdown">
-                    <a href="index.php" class="nav-link <?php echo in_array($current_page, ['admin_dashboard', 'admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_users', 'admin_import', 'admin_sync', 'admin_sdgs']) ? 'active' : ''; ?>">
+                    <a href="index.php" class="nav-link <?php echo in_array($current_page, ['admin_dashboard', 'admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_users', 'admin_import', 'admin_sync', 'admin_sdgs', 'admin_topics']) ? 'active' : ''; ?>">
                         <i class="fa-solid fa-gauge"></i> แผงควบคุม <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
                     </a>
                     <div class="dropdown-menu">
@@ -166,6 +166,9 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                         </a>
                         <a href="sdg_import.php" class="dropdown-item <?php echo $current_page === 'admin_sdgs' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-leaf"></i> จัดการ SDGs (ผลงานวิจัย)
+                        </a>
+                        <a href="topics_import.php" class="dropdown-item <?php echo $current_page === 'admin_topics' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-diagram-project"></i> Topic Prominence &amp; Trends
                         </a>
                     </div>
                 </div>

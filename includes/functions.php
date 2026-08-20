@@ -1007,6 +1007,92 @@ function fetch_scopus_abstract_details_with_retry($doi, $api_key) {
 }
 
 /**
+ * Phase 8 (Topic Prominence & Trends): resolve a publication's OpenAlex
+ * work record by DOI and extract its topic classification.
+ *
+ * Unlike the Scopus/NIH-iCite integrations elsewhere in this file,
+ * OpenAlex's Works API is DOI-native (`/works/doi:{doi}`) - no PMID or any
+ * other ID-conversion step is needed first. A `mailto` query param is sent
+ * per OpenAlex's "polite pool" convention (higher, more reliable rate
+ * limits for identified requests); `OPENALEX_API_KEY` is optional (empty
+ * string works fine for anonymous access - see config/db.php).
+ *
+ * @return array{openalex_id: ?string, topics: array} topics is a list of
+ *   ['topic_id','display_name','subfield','field','domain','score','is_primary']
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException
+ */
+function fetch_openalex_work_topics($doi) {
+    if (empty($doi)) {
+        return ['openalex_id' => null, 'topics' => []];
+    }
+
+    $params = ['mailto' => 'msc_research@up.ac.th'];
+    if (defined('OPENALEX_API_KEY') && OPENALEX_API_KEY !== '') {
+        $params['api_key'] = OPENALEX_API_KEY;
+    }
+    $url = "https://api.openalex.org/works/doi:" . urlencode($doi) . '?' . http_build_query($params);
+
+    $data = http_get_json($url, [], 10);
+
+    $openalex_id = $data['id'] ?? null;
+    $primary_id = $data['primary_topic']['id'] ?? null;
+    $topics = [];
+    foreach (($data['topics'] ?? []) as $t) {
+        $topics[] = [
+            'topic_id' => $t['id'] ?? '',
+            'display_name' => $t['display_name'] ?? '',
+            'subfield' => $t['subfield']['display_name'] ?? null,
+            'field' => $t['field']['display_name'] ?? null,
+            'domain' => $t['domain']['display_name'] ?? null,
+            'score' => isset($t['score']) ? (float)$t['score'] : null,
+            'is_primary' => ($primary_id !== null && ($t['id'] ?? null) === $primary_id) ? 1 : 0,
+        ];
+    }
+
+    return ['openalex_id' => $openalex_id, 'topics' => $topics];
+}
+
+/**
+ * fetch_openalex_work_topics() wrapped with the same SYNC-01/02-style retry
+ * contract used elsewhere (timeout: 3x with 5s/15s/45s backoff; 429: wait
+ * per header or 60s fallback). A 404 (OpenAlex has no work for this DOI -
+ * not uncommon, e.g. very new or non-indexed publications) is graceful
+ * absence (TOPIC-04), not an error - returns an empty result so the caller
+ * can mark this publication "checked, no match" rather than fail the batch.
+ *
+ * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ */
+function fetch_openalex_work_topics_with_retry($doi) {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_openalex_work_topics($doi);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[openalex][topics] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[openalex][topics] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiHttpException $e) {
+            if ($e->httpCode === 404) {
+                return ['openalex_id' => null, 'topics' => []];
+            }
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException(
+        "OpenAlex topic fetch failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
+}
+
+/**
  * Phase 6 (SDG-06b/06c): score a publication's title/keywords/abstract
  * against the bundled SDG keyphrase dictionary (data/sdg_data.json, a copy
  * of the in-house msc_sdgs tool's dictionary - see

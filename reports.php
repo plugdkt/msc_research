@@ -507,6 +507,68 @@ foreach ($filtered_publications as $pub) {
     }
 }
 
+// Phase 8 (Topic Prominence & Trends): aggregate OpenAlex's primary-topic
+// classification (see admin/classify_topics.php) across the currently
+// filtered publication set. Uses only the primary topic per publication
+// (not the full topics list) for a clean one-publication-one-bucket view,
+// the same shape as $sdg_groups above but without SDG's multi-tag credit
+// (a publication only ever has one primary topic).
+$topic_field_groups = []; // field display name => publication count
+$topic_trend_by_year = []; // publish_year => [field => count]
+$topics_classified_count = 0;
+$topics_unclassified_count = 0;
+
+if (!empty($filtered_publications)) {
+    $topic_pub_ids = array_column($filtered_publications, 'id');
+    $topic_placeholders = implode(',', array_fill(0, count($topic_pub_ids), '?'));
+    $stmtTopics = $pdo->prepare("
+        SELECT publication_id, field
+        FROM publication_topics
+        WHERE is_primary = 1 AND publication_id IN ($topic_placeholders)
+    ");
+    $stmtTopics->execute($topic_pub_ids);
+    $primary_field_by_pub = [];
+    foreach ($stmtTopics->fetchAll() as $row) {
+        $primary_field_by_pub[$row['publication_id']] = $row['field'] ?: 'ไม่ระบุสาขา (OpenAlex)';
+    }
+
+    foreach ($filtered_publications as $pub) {
+        $field = $primary_field_by_pub[$pub['id']] ?? null;
+        if ($field === null) {
+            // TOPIC-04: no DOI, or DOI never resolved/found in OpenAlex -
+            // graceful absence, excluded from the aggregate rather than
+            // shown as a fake zero-credit bucket.
+            $topics_unclassified_count++;
+            continue;
+        }
+        $topics_classified_count++;
+        $topic_field_groups[$field] = ($topic_field_groups[$field] ?? 0) + 1;
+
+        $year = (int)($pub['publish_year'] ?? 0);
+        if ($year > 0) {
+            if (!isset($topic_trend_by_year[$year])) {
+                $topic_trend_by_year[$year] = [];
+            }
+            $topic_trend_by_year[$year][$field] = ($topic_trend_by_year[$year][$field] ?? 0) + 1;
+        }
+    }
+    arsort($topic_field_groups);
+    ksort($topic_trend_by_year);
+}
+
+// Top 5 fields overall drive the trend chart's line datasets - keeps the
+// chart legible instead of one line per field when there are dozens.
+$top_fields_for_trend = array_slice(array_keys($topic_field_groups), 0, 5);
+$topic_trend_years = array_keys($topic_trend_by_year);
+$topic_trend_datasets = [];
+foreach ($top_fields_for_trend as $tf_field) {
+    $series = [];
+    foreach ($topic_trend_years as $tf_year) {
+        $series[] = $topic_trend_by_year[$tf_year][$tf_field] ?? 0;
+    }
+    $topic_trend_datasets[] = ['label' => $tf_field, 'data' => $series];
+}
+
 include_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -700,6 +762,9 @@ include_once __DIR__ . '/includes/header.php';
     </button>
     <button id="tab-sdgs" class="report-tab-btn" onclick="switchReportTab('sdgs')">
         <i class="fa-solid fa-leaf"></i> สถิติตาม SDGs
+    </button>
+    <button id="tab-topics" class="report-tab-btn" onclick="switchReportTab('topics')">
+        <i class="fa-solid fa-diagram-project"></i> Topic Prominence &amp; Trends
     </button>
     <button id="tab-leaderboard" class="report-tab-btn" onclick="switchReportTab('leaderboard')">
         <i class="fa-solid fa-trophy"></i> จัดอันดับนักวิจัย
@@ -1703,6 +1768,72 @@ include_once __DIR__ . '/includes/header.php';
     <?php endif; ?>
 </div>
 
+<div id="section-topics" class="report-section" style="display: none;">
+    <div style="margin-bottom: 25px;">
+        <h3 style="margin-bottom: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-diagram-project" style="color: var(--color-accent);"></i>
+            <span>Topic Prominence &amp; Trends (OpenAlex)</span>
+        </h3>
+        <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 20px;">
+            จำแนกผลงานวิจัยตามหมวดหมู่สาขาวิชา (Field) ของ OpenAlex เพื่อดูว่าคณะมีความโดดเด่นด้านใด และแนวโน้มเปลี่ยนแปลงอย่างไรในแต่ละปี — นับเฉพาะ Primary Topic ของแต่ละผลงาน
+        </p>
+    </div>
+
+    <?php if ($topics_classified_count === 0): ?>
+        <div class="glass-panel" style="padding: 60px; text-align: center; color: var(--color-text-muted);">
+            <i class="fa-solid fa-diagram-project" style="font-size: 3.5rem; margin-bottom: 20px; color: rgba(255,255,255,0.1); display: block;"></i>
+            <h4 style="font-size: 1.1rem; font-weight: 600; color: var(--color-text-main); margin-bottom: 8px;">ยังไม่มีข้อมูล Topic จาก OpenAlex</h4>
+            <p style="font-size: 0.85rem; max-width: 420px; margin: 0 auto; line-height: 1.6;">ผู้ดูแลระบบยังไม่ได้รันการจำแนก Topic — ไปที่ Admin Panel &gt; Topic Prominence &amp; Trends เพื่อเริ่มดึงข้อมูล</p>
+        </div>
+    <?php else: ?>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+            <div class="glass-panel" style="padding: 25px;">
+                <h4 style="margin-bottom: 15px; font-weight: 600; font-size: 0.95rem;">สาขาวิชาที่คณะมีผลงานโดดเด่นที่สุด (Prominence)</h4>
+                <div style="position: relative; height: 320px; width: 100%;">
+                    <canvas id="topicProminenceChart"></canvas>
+                </div>
+            </div>
+            <div class="glass-panel" style="padding: 25px;">
+                <h4 style="margin-bottom: 15px; font-weight: 600; font-size: 0.95rem;">แนวโน้มรายปี — 5 สาขาวิชาที่มีผลงานมากที่สุด (Trends)</h4>
+                <div style="position: relative; height: 320px; width: 100%;">
+                    <canvas id="topicTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel" style="padding: 25px;">
+            <h4 style="margin-bottom: 15px; font-weight: 600; font-size: 0.95rem;">ตารางสรุปตามสาขาวิชา</h4>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border-glass); color: var(--color-text-muted);">
+                            <th style="padding: 10px 8px;">สาขาวิชา (Field)</th>
+                            <th style="padding: 10px 8px; text-align: right;">จำนวนผลงาน</th>
+                            <th style="padding: 10px 8px; text-align: right;">สัดส่วน</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($topic_field_groups as $tf_name => $tf_count):
+                            $tf_percent = $topics_classified_count > 0 ? ($tf_count / $topics_classified_count * 100) : 0;
+                        ?>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 10px 8px;"><?php echo htmlspecialchars($tf_name); ?></td>
+                            <td style="padding: 10px 8px; text-align: right; font-family: var(--font-eng);"><?php echo number_format($tf_count); ?></td>
+                            <td style="padding: 10px 8px; text-align: right; font-family: var(--font-eng); color: var(--color-text-muted);"><?php echo number_format($tf_percent, 1); ?>%</td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php if ($topics_unclassified_count > 0): ?>
+                <p style="font-size: 0.78rem; color: var(--color-text-muted); margin-top: 12px;">
+                    <i class="fa-solid fa-circle-info"></i> อีก <?php echo number_format($topics_unclassified_count); ?> ผลงาน (ในตัวกรองปัจจุบัน) ไม่มี Topic — ไม่มี DOI หรือยังไม่ได้ดึงข้อมูล/OpenAlex ไม่พบข้อมูล จึงไม่ถูกนับในสรุปนี้
+                </p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
 <!-- Tab and Chart Control Scripts -->
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -2469,6 +2600,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let deptCitationsChartInstance = null;
     let sourceChartInstance = null;
     let roleChartInstance = null;
+    let topicProminenceChartInstance = null;
+    let topicTrendChartInstance = null;
 
     window.renderDashboardChart = function() {
         const theme = getChartThemeColors();
@@ -2575,6 +2708,87 @@ document.addEventListener('DOMContentLoaded', () => {
                         x: {
                             grid: { color: theme.grid },
                             ticks: { color: theme.text, font: { family: 'Sarabun' } }
+                        },
+                        y: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text, precision: 0 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2z. Topic Prominence (horizontal bar) + Trends (multi-line)
+        const ctxTopicProminence = document.getElementById('topicProminenceChart');
+        if (ctxTopicProminence) {
+            if (topicProminenceChartInstance) topicProminenceChartInstance.destroy();
+            topicProminenceChartInstance = new Chart(ctxTopicProminence, {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode(array_slice(array_keys($topic_field_groups), 0, 10)); ?>,
+                    datasets: [
+                        {
+                            label: 'จำนวนผลงาน',
+                            data: <?php echo json_encode(array_slice(array_values($topic_field_groups), 0, 10)); ?>,
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 2,
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text, precision: 0 }
+                        },
+                        y: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text, font: { family: 'Sarabun', size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        const ctxTopicTrend = document.getElementById('topicTrendChart');
+        if (ctxTopicTrend) {
+            if (topicTrendChartInstance) topicTrendChartInstance.destroy();
+            const topicTrendPalette = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
+            const topicTrendDatasets = <?php echo json_encode($topic_trend_datasets); ?>;
+            topicTrendChartInstance = new Chart(ctxTopicTrend, {
+                type: 'line',
+                data: {
+                    labels: <?php echo json_encode($topic_trend_years); ?>,
+                    datasets: topicTrendDatasets.map((ds, i) => ({
+                        label: ds.label,
+                        data: ds.data,
+                        borderColor: topicTrendPalette[i % topicTrendPalette.length],
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 3
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: theme.text, font: { family: 'Sarabun', size: 11 } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text }
                         },
                         y: {
                             grid: { color: theme.grid },

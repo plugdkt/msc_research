@@ -14,6 +14,10 @@ define('DB_USER', 'root');
 define('DB_PASS', 'CHANGE_ME');
 define('SCOPUS_API_KEY', 'CHANGE_ME');
 
+// Optional: OpenAlex works without a key (anonymous requests are rate
+// limited but functional) - only needed for the "polite pool"/premium tier.
+define('OPENALEX_API_KEY', 'CHANGE_ME');
+
 define('SSO_CLIENT_ID', 'msc_research');
 define('SSO_CLIENT_SECRET', 'CHANGE_ME');
 define('SSO_LOGIN_URL', 'https://www.medsci.up.ac.th/msc_acc/sso/login.php');

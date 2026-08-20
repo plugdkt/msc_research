@@ -19,6 +19,11 @@ if (!defined('DB_PASS')) define('DB_PASS', getenv('MSC_DB_PASS') ?: '');
 if (!defined('DB_CHARSET')) define('DB_CHARSET', 'utf8mb4');
 if (!defined('SCOPUS_API_KEY')) define('SCOPUS_API_KEY', getenv('MSC_SCOPUS_API_KEY') ?: '');
 
+// Phase 8 (Topic Prominence & Trends): OpenAlex's public API works without
+// any key (anonymous requests are rate-limited but functional). This is
+// only for the "polite pool"/premium tier - higher rate limits when set.
+if (!defined('OPENALEX_API_KEY')) define('OPENALEX_API_KEY', getenv('MSC_OPENALEX_API_KEY') ?: '');
+
 // MEDSCI ACC & SSO Configurations
 if (!defined('SSO_CLIENT_ID')) define('SSO_CLIENT_ID', getenv('MSC_SSO_CLIENT_ID') ?: 'msc_research');
 if (!defined('SSO_CLIENT_SECRET')) define('SSO_CLIENT_SECRET', getenv('MSC_SSO_CLIENT_SECRET') ?: '');
