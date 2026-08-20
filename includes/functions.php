@@ -1059,58 +1059,75 @@ function fetch_scopus_citescore_quartile($issn) {
     $title = $entry['dc:title'] ?? null;
     $years = $entry['citeScoreYearInfoList']['citeScoreYearInfo'] ?? [];
 
-    // Prefer the most recent year with @status "Complete" - the current
-    // year is normally "In-Progress" (provisional, still accumulating
-    // citations), so basing quartile on it would understate true standing.
-    // Fall back to whatever's first (newest) if no Complete year exists yet
-    // (e.g. a journal added to Scopus this year).
-    $chosen = null;
+    $years_map = [];
+    $latest_complete_year = null;
+
     foreach ($years as $y) {
-        if (($y['@status'] ?? '') === 'Complete') {
-            $chosen = $y;
-            break;
-        }
-    }
-    if (!$chosen && !empty($years)) {
-        $chosen = $years[0];
-    }
-    if (!$chosen) {
-        return ['title' => $title, 'quartile' => null, 'percentile' => null, 'citescore' => null, 'year' => null];
-    }
-
-    $info = $chosen['citeScoreInformationList'][0]['citeScoreInfo'][0] ?? null;
-    $citescore = isset($info['citeScore']) ? (float)$info['citeScore'] : null;
-
-    $best_percentile = null;
-    foreach (($info['citeScoreSubjectRank'] ?? []) as $sr) {
-        if (!isset($sr['percentile'])) {
+        $year_str = isset($y['@year']) ? (string)$y['@year'] : '';
+        if (empty($year_str)) {
             continue;
         }
-        $p = (float)$sr['percentile'];
-        if ($best_percentile === null || $p > $best_percentile) {
-            $best_percentile = $p;
+        $status = $y['@status'] ?? '';
+        $info = $y['citeScoreInformationList'][0]['citeScoreInfo'][0] ?? null;
+        $citescore = isset($info['citeScore']) ? (float)$info['citeScore'] : null;
+
+        $best_percentile = null;
+        foreach (($info['citeScoreSubjectRank'] ?? []) as $sr) {
+            if (!isset($sr['percentile'])) {
+                continue;
+            }
+            $p = (float)$sr['percentile'];
+            if ($best_percentile === null || $p > $best_percentile) {
+                $best_percentile = $p;
+            }
+        }
+
+        $quartile = null;
+        if ($best_percentile !== null) {
+            if ($best_percentile >= 75) {
+                $quartile = 'Q1';
+            } elseif ($best_percentile >= 50) {
+                $quartile = 'Q2';
+            } elseif ($best_percentile >= 25) {
+                $quartile = 'Q3';
+            } else {
+                $quartile = 'Q4';
+            }
+        }
+
+        $years_map[$year_str] = [
+            'quartile' => $quartile,
+            'percentile' => $best_percentile,
+            'citescore' => $citescore,
+            'status' => $status,
+        ];
+
+        if ($latest_complete_year === null && $status === 'Complete') {
+            $latest_complete_year = $year_str;
         }
     }
 
-    $quartile = null;
-    if ($best_percentile !== null) {
-        if ($best_percentile >= 75) {
-            $quartile = 'Q1';
-        } elseif ($best_percentile >= 50) {
-            $quartile = 'Q2';
-        } elseif ($best_percentile >= 25) {
-            $quartile = 'Q3';
-        } else {
-            $quartile = 'Q4';
-        }
+    if ($latest_complete_year === null && !empty($years_map)) {
+        $latest_complete_year = array_key_first($years_map);
     }
+
+    if (empty($years_map)) {
+        return ['title' => $title, 'quartile' => null, 'percentile' => null, 'citescore' => null, 'year' => null, 'years' => []];
+    }
+
+    $chosen_info = $years_map[$latest_complete_year] ?? [
+        'quartile' => null,
+        'percentile' => null,
+        'citescore' => null,
+    ];
 
     return [
         'title' => $title,
-        'quartile' => $quartile,
-        'percentile' => $best_percentile,
-        'citescore' => $citescore,
-        'year' => isset($chosen['@year']) ? (string)$chosen['@year'] : null,
+        'quartile' => $chosen_info['quartile'],
+        'percentile' => $chosen_info['percentile'],
+        'citescore' => $chosen_info['citescore'],
+        'year' => $latest_complete_year,
+        'years' => $years_map,
     ];
 }
 

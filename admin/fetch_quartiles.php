@@ -100,17 +100,43 @@ if ($action === 'process') {
             ]);
         }
 
-        // Always overwrite - matches the existing CSV import's retroactive
-        // update behavior, since leadership wants Scopus quartile as the
-        // sole source now, replacing any prior SCImago-imported value.
-        $pdo->prepare("
-            UPDATE `publications`
-            SET quartile = :quartile
+        // Match each publication's publish_year against the journal's historical
+        // CiteScore timeline for 100% year-by-year academic accuracy.
+        $stmt_pubs = $pdo->prepare("
+            SELECT id, publish_year 
+            FROM `publications`
             WHERE REPLACE(REPLACE(REPLACE(UPPER(journal_issn), '-', ''), ' ', ''), '.', '') = :issn
-        ")->execute([
-            ':quartile' => $result['quartile'],
-            ':issn' => $issn,
-        ]);
+        ");
+        $stmt_pubs->execute([':issn' => $issn]);
+        $matching_pubs = $stmt_pubs->fetchAll(PDO::FETCH_ASSOC);
+
+        $update_pub = $pdo->prepare("UPDATE `publications` SET quartile = :quartile WHERE id = :id");
+
+        $years_map = $result['years'] ?? [];
+        $available_years = array_keys($years_map);
+        sort($available_years); // e.g. ['2011', '2012', ..., '2025']
+        $earliest_year = !empty($available_years) ? $available_years[0] : null;
+
+        foreach ($matching_pubs as $mp) {
+            $pub_year = !empty($mp['publish_year']) ? (string)$mp['publish_year'] : '';
+            $matched_quartile = null;
+
+            if (!empty($pub_year) && isset($years_map[$pub_year]['quartile'])) {
+                // Exact year match (e.g. paper published in 2022 uses 2022 CiteScore Quartile)
+                $matched_quartile = $years_map[$pub_year]['quartile'];
+            } elseif (!empty($pub_year) && $earliest_year && (int)$pub_year < (int)$earliest_year) {
+                // Publication was published before CiteScore began -> use earliest recorded CiteScore quartile
+                $matched_quartile = $years_map[$earliest_year]['quartile'] ?? $result['quartile'];
+            } else {
+                // Default / latest complete quartile fallback
+                $matched_quartile = $result['quartile'];
+            }
+
+            $update_pub->execute([
+                ':quartile' => $matched_quartile,
+                ':id' => $mp['id'],
+            ]);
+        }
 
         $pdo->commit();
     } catch (Exception $e) {
