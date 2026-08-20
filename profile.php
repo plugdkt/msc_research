@@ -254,8 +254,14 @@ include_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
             </div>
-            <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 12px; border-top: 1px solid var(--border-glass); padding-top: 8px;">
-                ยึดตาม Scopus CiteScore ณ ปีที่ตีพิมพ์
+            <?php $no_q_count = $pub_total - $q_total_classified; ?>
+            <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 12px; border-top: 1px solid var(--border-glass); padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span>ยึดตาม Scopus CiteScore</span>
+                <?php if ($no_q_count > 0): ?>
+                    <span style="color: var(--color-text-muted); background: rgba(255,255,255,0.04); padding: 1px 6px; border-radius: 4px;" title="ผลงานในวารสารที่ยังไม่มีการจัดอันดับ CiteScore หรือยุติการตีพิมพ์ไปแล้ว">
+                        ไม่มี Q: <strong><?php echo $no_q_count; ?></strong>
+                    </span>
+                <?php endif; ?>
             </div>
         </div>
 
