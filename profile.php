@@ -91,6 +91,23 @@ $q1_q2_pct = $pub_total > 0 ? round(($q1_q2_total / $pub_total) * 100) : 0;
 $avg_rcr = !empty($rcr_list) ? (array_sum($rcr_list) / count($rcr_list)) : null;
 $max_rcr = !empty($rcr_list) ? max($rcr_list) : null;
 
+// Fetch Top Topics from OpenAlex for this researcher
+$top_topics = [];
+$pub_ids = array_column($publications, 'id');
+if (!empty($pub_ids)) {
+    $placeholders = implode(',', array_fill(0, count($pub_ids), '?'));
+    $topics_stmt = $pdo->prepare("
+        SELECT pt.display_name, COUNT(*) as cnt, pt.subfield, pt.field
+        FROM publication_topics pt
+        WHERE pt.publication_id IN ($placeholders)
+        GROUP BY pt.display_name, pt.subfield, pt.field
+        ORDER BY cnt DESC
+        LIMIT 2
+    ");
+    $topics_stmt->execute($pub_ids);
+    $top_topics = $topics_stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 // Prepare Chart.js data
 $chart_years = array_keys($yearly_data);
 $chart_counts = array_values($yearly_data);
@@ -106,7 +123,7 @@ include_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Profile Info Card -->
-<div class="glass-panel animate-fade-in" style="padding: 40px; display: flex; gap: 30px; margin-bottom: 40px; flex-wrap: wrap; align-items: center;">
+<div class="glass-panel animate-fade-in" style="padding: 40px; display: flex; gap: 30px; margin-bottom: 30px; flex-wrap: wrap; align-items: center;">
     <div class="researcher-avatar" style="width: 140px; height: 140px; font-size: 3.5rem; border-width: 4px;">
         <?php if (!empty($researcher['avatar_url'])): ?>
             <img src="<?php echo htmlspecialchars($researcher['avatar_url']); ?>" alt="avatar">
@@ -182,89 +199,200 @@ include_once __DIR__ . '/includes/header.php';
     </div>
 </div>
 
-<!-- Executive Highlights (Quartiles, SDGs, RCR, Global Network) -->
+<!-- Executive Highlights (4 Cards Grid) -->
 <?php if (!empty($publications)): ?>
-<div class="glass-panel animate-fade-in" style="padding: 16px 22px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; align-items: start; border-left: 3px solid var(--color-primary); background: rgba(255,255,255,0.02);">
-    <!-- Col 1: Quartiles -->
-    <div>
-        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
-            <i class="fa-solid fa-award" style="color: #10b981;"></i> ระดับวารสาร (Quartiles)
-        </div>
-        <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
-            <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q1: <?php echo $quartile_counts['Q1']; ?></span>
-            <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q2: <?php echo $quartile_counts['Q2']; ?></span>
-            <span class="badge" style="background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q3: <?php echo $quartile_counts['Q3']; ?></span>
-            <span class="badge" style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q4: <?php echo $quartile_counts['Q4']; ?></span>
-        </div>
-        <?php if ($q1_q2_total > 0): ?>
-            <div style="font-size: 0.7rem; color: #10b981; margin-top: 4px; font-family: var(--font-eng); font-weight: 600;">
-                ★ Q1+Q2 คิดเป็น <?php echo $q1_q2_pct; ?>%
-            </div>
-        <?php endif; ?>
+<div style="margin-bottom: 35px;" class="animate-fade-in">
+    <div style="font-size: 1rem; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; color: var(--color-text-main);">
+        <i class="fa-solid fa-sparkles" style="color: var(--color-accent);"></i>
+        <span>ภาพรวมความเชี่ยวชาญและคุณภาพผลงานวิจัย (Research Highlights & Impact)</span>
     </div>
 
-    <!-- Col 2: Top SDGs -->
-    <div>
-        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
-            <i class="fa-solid fa-bullseye" style="color: var(--color-accent);"></i> SDGs เชี่ยวชาญหลัก
-        </div>
-        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-            <?php if (!empty($researcher_sdgs)): ?>
-                <?php 
-                $top_sdgs = array_slice($researcher_sdgs, 0, 2, true);
-                foreach ($top_sdgs as $sdg_num => $cnt): 
-                    $sdg_info = get_sdg_info($sdg_num);
-                ?>
-                    <span class="badge" style="background: <?php echo $sdg_info['color'] ?? '#3b82f6'; ?>22; color: <?php echo $sdg_info['color'] ?? '#3b82f6'; ?>; border: 1px solid <?php echo $sdg_info['color'] ?? '#3b82f6'; ?>44; font-size: 0.72rem; font-weight: 600; padding: 2px 7px;">
-                        SDG <?php echo $sdg_num; ?> (<?php echo $cnt; ?>)
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+        <!-- Card 1: Quartiles -->
+        <div class="glass-panel" style="padding: 20px; border-top: 3px solid #10b981; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; text-transform: uppercase;">
+                        <i class="fa-solid fa-award" style="color: #10b981; margin-right: 4px;"></i> คุณภาพวารสาร (Quartiles)
                     </span>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <span style="font-size: 0.75rem; color: var(--color-text-muted);">-</span>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Col 3: RCR & Global Impact -->
-    <div>
-        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
-            <i class="fa-solid fa-chart-line" style="color: #60a5fa;"></i> ดัชนีอ้างอิงสากล (NIH RCR)
-        </div>
-        <?php if ($avg_rcr !== null): ?>
-            <div style="font-size: 0.82rem; font-family: var(--font-eng); font-weight: 600; color: var(--color-text-main);">
-                เฉลี่ย <strong style="color: #10b981;"><?php echo number_format($avg_rcr, 2); ?></strong> 
-                <span style="color: var(--color-text-muted); font-size: 0.72rem; font-weight: 400; font-family: var(--font-thai);">| สูงสุด <strong style="color: #10b981; font-family: var(--font-eng);"><?php echo number_format($max_rcr, 2); ?></strong></span>
-            </div>
-            <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 2px;">
-                <?php echo $avg_rcr >= 1.0 ? '<span style="color:#10b981;">● สูงกว่าเกณฑ์มาตรฐานโลก</span>' : '● อยู่ในเกณฑ์มาตรฐาน'; ?>
-            </div>
-        <?php else: ?>
-            <span style="font-size: 0.75rem; color: var(--color-text-muted);">-</span>
-        <?php endif; ?>
-    </div>
-
-    <!-- Col 4: Top International Collaborations -->
-    <div>
-        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
-            <i class="fa-solid fa-globe" style="color: #fbbf24;"></i> เครือข่ายนานาชาติ
-        </div>
-        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-            <?php if (!empty($country_list)): ?>
+                    <span style="font-size: 0.75rem; font-weight: 700; color: #10b981; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); padding: 2px 7px; border-radius: 4px; font-family: var(--font-eng);">
+                        Q1+Q2: <?php echo $q1_q2_pct; ?>%
+                    </span>
+                </div>
+                
+                <!-- Visual Bar -->
                 <?php 
-                $top_countries = array_slice($country_list, 0, 2, true);
-                foreach ($top_countries as $c_name => $c_cnt): 
-                    $c_flag = get_country_flag_url($c_name);
+                $q_total_classified = $quartile_counts['Q1'] + $quartile_counts['Q2'] + $quartile_counts['Q3'] + $quartile_counts['Q4'];
+                $q1_w = $q_total_classified > 0 ? ($quartile_counts['Q1'] / $q_total_classified) * 100 : 0;
+                $q2_w = $q_total_classified > 0 ? ($quartile_counts['Q2'] / $q_total_classified) * 100 : 0;
+                $q3_w = $q_total_classified > 0 ? ($quartile_counts['Q3'] / $q_total_classified) * 100 : 0;
+                $q4_w = $q_total_classified > 0 ? ($quartile_counts['Q4'] / $q_total_classified) * 100 : 0;
                 ?>
-                    <span class="badge" style="font-size: 0.72rem; padding: 2px 7px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass);">
-                        <?php if ($c_flag): ?>
-                            <img src="<?php echo $c_flag; ?>" style="width: 13px; height: 9px; vertical-align: middle; border-radius: 1px; margin-right: 3px;" alt="" />
+                <div style="height: 8px; border-radius: 4px; overflow: hidden; display: flex; background: rgba(255,255,255,0.05); margin-bottom: 14px;">
+                    <?php if ($q1_w > 0): ?><div style="width: <?php echo $q1_w; ?>%; background: #10b981;" title="Q1: <?php echo $quartile_counts['Q1']; ?>"></div><?php endif; ?>
+                    <?php if ($q2_w > 0): ?><div style="width: <?php echo $q2_w; ?>%; background: #3b82f6;" title="Q2: <?php echo $quartile_counts['Q2']; ?>"></div><?php endif; ?>
+                    <?php if ($q3_w > 0): ?><div style="width: <?php echo $q3_w; ?>%; background: #f59e0b;" title="Q3: <?php echo $quartile_counts['Q3']; ?>"></div><?php endif; ?>
+                    <?php if ($q4_w > 0): ?><div style="width: <?php echo $q4_w; ?>%; background: #ef4444;" title="Q4: <?php echo $quartile_counts['Q4']; ?>"></div><?php endif; ?>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center;">
+                    <div style="background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 6px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #10b981; font-weight: 700;">Q1</div>
+                        <div style="font-size: 1.1rem; font-weight: 700; font-family: var(--font-eng); color: #10b981;"><?php echo $quartile_counts['Q1']; ?></div>
+                    </div>
+                    <div style="background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); border-radius: 6px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #60a5fa; font-weight: 700;">Q2</div>
+                        <div style="font-size: 1.1rem; font-weight: 700; font-family: var(--font-eng); color: #60a5fa;"><?php echo $quartile_counts['Q2']; ?></div>
+                    </div>
+                    <div style="background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 6px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #fbbf24; font-weight: 700;">Q3</div>
+                        <div style="font-size: 1.1rem; font-weight: 700; font-family: var(--font-eng); color: #fbbf24;"><?php echo $quartile_counts['Q3']; ?></div>
+                    </div>
+                    <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 6px; padding: 6px 2px;">
+                        <div style="font-size: 0.68rem; color: #f87171; font-weight: 700;">Q4</div>
+                        <div style="font-size: 1.1rem; font-weight: 700; font-family: var(--font-eng); color: #f87171;"><?php echo $quartile_counts['Q4']; ?></div>
+                    </div>
+                </div>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 12px; border-top: 1px solid var(--border-glass); padding-top: 8px;">
+                ยึดตาม Scopus CiteScore ณ ปีที่ตีพิมพ์
+            </div>
+        </div>
+
+        <!-- Card 2: SDGs Focus -->
+        <div class="glass-panel" style="padding: 20px; border-top: 3px solid var(--color-accent); display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; text-transform: uppercase;">
+                        <i class="fa-solid fa-bullseye" style="color: var(--color-accent); margin-right: 4px;"></i> SDGs เชี่ยวชาญหลัก
+                    </span>
+                    <span style="font-size: 0.72rem; color: var(--color-text-muted);">
+                        พบ <?php echo count($researcher_sdgs); ?> เป้าหมาย
+                    </span>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <?php if (!empty($researcher_sdgs)): ?>
+                        <?php 
+                        $top_sdgs = array_slice($researcher_sdgs, 0, 3, true);
+                        foreach ($top_sdgs as $sdg_num => $cnt): 
+                            $sdg_code = 'SDG ' . $sdg_num;
+                            $sdg_info = get_sdg_badge_details($sdg_code);
+                            $sdg_color = $sdg_info['color'] ?? '#3b82f6';
+                            $sdg_name = $sdg_info['th_name'] ?? $sdg_info['name'] ?? ('SDG ' . $sdg_num);
+                        ?>
+                            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 6px 10px; border-radius: 6px;">
+                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                                    <span style="background: <?php echo $sdg_color; ?>; color: white; width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 900; flex-shrink: 0;">
+                                        <?php echo $sdg_num; ?>
+                                    </span>
+                                    <span style="font-size: 0.8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-text-main);">
+                                        <?php echo htmlspecialchars($sdg_name); ?>
+                                    </span>
+                                </div>
+                                <span style="font-size: 0.75rem; font-weight: 700; font-family: var(--font-eng); color: <?php echo $sdg_color; ?>; background: <?php echo $sdg_color; ?>18; padding: 2px 7px; border-radius: 4px; flex-shrink: 0;">
+                                    <?php echo $cnt; ?> เรื่อง
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div style="font-size: 0.8rem; color: var(--color-text-muted); text-align: center; padding: 15px;">ยังไม่มีการระบุเป้าหมาย SDG</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 12px; border-top: 1px solid var(--border-glass); padding-top: 8px;">
+                จำแนกตามพจนานุกรมคำสำคัญของคณะ
+            </div>
+        </div>
+
+        <!-- Card 3: RCR & Citations -->
+        <div class="glass-panel" style="padding: 20px; border-top: 3px solid #60a5fa; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <span style="font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; text-transform: uppercase;">
+                        <i class="fa-solid fa-chart-line" style="color: #60a5fa; margin-right: 4px;"></i> ดัชนีอ้างอิงสากล (NIH RCR)
+                    </span>
+                    <span style="font-size: 0.72rem; color: var(--color-text-muted);">
+                        NIH iCite Benchmark
+                    </span>
+                </div>
+
+                <?php if ($avg_rcr !== null): ?>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                        <div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 8px; padding: 10px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--color-text-muted);">RCR เฉลี่ย</div>
+                            <div style="font-size: 1.4rem; font-weight: 700; color: #10b981; font-family: var(--font-eng);"><?php echo number_format($avg_rcr, 2); ?></div>
+                        </div>
+                        <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.2); border-radius: 8px; padding: 10px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--color-text-muted);">RCR สูงสุด</div>
+                            <div style="font-size: 1.4rem; font-weight: 700; color: #60a5fa; font-family: var(--font-eng);"><?php echo number_format($max_rcr, 2); ?></div>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: #10b981; font-weight: 500; display: flex; align-items: center; gap: 5px;">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span><?php echo $avg_rcr >= 1.0 ? 'ได้รับการอ้างอิงสูงกว่าเกณฑ์เฉลี่ยโลก' : 'อยู่ในเกณฑ์มาตรฐานสากล'; ?></span>
+                    </div>
+                <?php else: ?>
+                    <div style="font-size: 0.8rem; color: var(--color-text-muted); text-align: center; padding: 20px 0;">
+                        ไม่มีผลงานที่มีข้อมูลใน PubMed / NIH iCite
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 12px; border-top: 1px solid var(--border-glass); padding-top: 8px;">
+                เกณฑ์มาตรฐานโลก = 1.00 (NIH Benchmark)
+            </div>
+        </div>
+
+        <!-- Card 4: Global Network & Topics -->
+        <div class="glass-panel" style="padding: 20px; border-top: 3px solid #fbbf24; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 0.8rem; color: var(--color-text-muted); font-weight: 600; text-transform: uppercase;">
+                        <i class="fa-solid fa-globe" style="color: #fbbf24; margin-right: 4px;"></i> เครือข่ายสากล & หัวข้อวิจัย
+                    </span>
+                </div>
+
+                <!-- Top Countries -->
+                <div style="margin-bottom: 10px;">
+                    <div style="font-size: 0.7rem; color: var(--color-text-muted); margin-bottom: 5px;">ประเทศร่วมวิจัยหลัก:</div>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <?php if (!empty($country_list)): ?>
+                            <?php 
+                            $top_countries = array_slice($country_list, 0, 3, true);
+                            foreach ($top_countries as $c_name => $c_cnt): 
+                                $c_flag = get_country_flag_url($c_name);
+                            ?>
+                                <span class="badge" style="font-size: 0.72rem; padding: 3px 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass);">
+                                    <?php if ($c_flag): ?>
+                                        <img src="<?php echo $c_flag; ?>" style="width: 13px; height: 9px; vertical-align: middle; border-radius: 1px; margin-right: 3px;" alt="" />
+                                    <?php endif; ?>
+                                    <?php echo htmlspecialchars($c_name); ?> (<?php echo $c_cnt; ?>)
+                                </span>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <span style="font-size: 0.72rem; color: var(--color-text-muted); font-style: italic;">งานวิจัยในประเทศ</span>
                         <?php endif; ?>
-                        <?php echo htmlspecialchars($c_name); ?> (<?php echo $c_cnt; ?>)
-                    </span>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <span style="font-size: 0.72rem; color: var(--color-text-muted); font-style: italic;">งานวิจัยในประเทศ</span>
-            <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Top OpenAlex Topics -->
+                <?php if (!empty($top_topics)): ?>
+                    <div style="border-top: 1px dashed var(--border-glass); padding-top: 8px;">
+                        <div style="font-size: 0.7rem; color: var(--color-text-muted); margin-bottom: 5px;">หัวข้อวิจัยเด่น (OpenAlex):</div>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <?php foreach ($top_topics as $tp): ?>
+                                <div style="font-size: 0.72rem; color: var(--color-text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fa-solid fa-tag" style="color: var(--color-primary); font-size: 0.6rem;"></i>
+                                    <span title="<?php echo htmlspecialchars($tp['display_name']); ?>"><?php echo htmlspecialchars($tp['display_name']); ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 12px; border-top: 1px solid var(--border-glass); padding-top: 8px;">
+                การวิเคราะห์คลัสเตอร์สากล (OpenAlex Topics)
+            </div>
         </div>
     </div>
 </div>
