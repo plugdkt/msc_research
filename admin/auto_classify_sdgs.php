@@ -124,23 +124,22 @@ if ($action === 'process') {
 
     $results = score_publication_sdgs($pub['title'], $pub['keywords'], $pub['abstract']);
 
-    // Strict "more than" (not >=) per the 2026-08-20 threshold decision.
-    if (empty($results) || !($results[0]['score'] > MIN_AUTO_APPLY_SCORE)) {
+    // Score threshold: 0.5 and above (>= 0.5)
+    if (empty($results) || !($results[0]['score'] >= MIN_AUTO_APPLY_SCORE)) {
         echo json_encode([
             'id' => $pub_id,
             'status' => 'low_confidence',
-            'reason' => empty($results) ? 'ไม่พบคำสำคัญที่ตรงกับ SDG ใดเลย' : ('คะแนนต่ำกว่าเกณฑ์ (' . round($results[0]['score'], 2) . ' ไม่มากกว่า ' . MIN_AUTO_APPLY_SCORE . ')'),
+            'reason' => empty($results) ? 'ไม่พบคำสำคัญที่ตรงกับ SDG ใดเลย' : ('คะแนนต่ำกว่าเกณฑ์ (' . round($results[0]['score'], 2) . ' น้อยกว่า ' . MIN_AUTO_APPLY_SCORE . ')'),
             'top_score' => empty($results) ? 0 : round($results[0]['score'], 2),
         ]);
         exit;
     }
 
     // Take up to MAX_AUTO_APPLY_SDGS ranks, each gated individually by the
-    // same strict threshold (a lower-ranked SDG never gets a pass just
-    // because the top one cleared the bar).
+    // threshold (>= 0.5).
     $qualified = array_values(array_filter(
         array_slice($results, 0, MAX_AUTO_APPLY_SDGS),
-        function ($r) { return $r['score'] > MIN_AUTO_APPLY_SCORE; }
+        function ($r) { return $r['score'] >= MIN_AUTO_APPLY_SCORE; }
     ));
 
     $slot_codes = [null, null, null];

@@ -320,7 +320,7 @@ if (isset($_POST['upload_csv'])) {
                     <span>Auto-Classify All (จัดกลุ่ม SDG อัตโนมัติทั้งคณะ)</span>
                 </div>
                 <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 4px 0 0 0; line-height: 1.4;">
-                    <strong>เขียน SDG สูงสุด 3 อันดับอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (มากกว่า <span id="min-score-label">0.5</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
+                    <strong>เขียน SDG สูงสุด 3 อันดับอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (≥ <span id="min-score-label">0.5</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-shrink:0;">
