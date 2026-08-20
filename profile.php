@@ -29,6 +29,11 @@ $total_citations = 0;
 $first_author_count = 0;
 $co_author_count = 0;
 $yearly_data = [];
+$quartile_counts = ['Q1' => 0, 'Q2' => 0, 'Q3' => 0, 'Q4' => 0];
+$researcher_sdgs = [];
+$rcr_list = [];
+$country_list = [];
+
 foreach ($publications as $pub) {
     $total_citations += $pub['citation_count'];
     $year = $pub['publish_year'];
@@ -43,8 +48,48 @@ foreach ($publications as $pub) {
     } else {
         $co_author_count++;
     }
+
+    // Quartiles
+    $q = $pub['quartile'] ?? '';
+    if (isset($quartile_counts[$q])) {
+        $quartile_counts[$q]++;
+    }
+
+    // SDGs
+    foreach (['sdg_primary', 'sdg_secondary', 'sdg_tertiary'] as $slot) {
+        $s = $pub[$slot] ?? '';
+        if (!empty($s) && preg_match('/SDG\s*(\d+)/i', $s, $m)) {
+            $num = (int)$m[1];
+            $researcher_sdgs[$num] = ($researcher_sdgs[$num] ?? 0) + 1;
+        }
+    }
+
+    // RCR
+    if ($pub['rcr'] !== null && $pub['rcr'] !== '') {
+        $rcr_list[] = (float)$pub['rcr'];
+    }
+
+    // Countries
+    if (!empty($pub['countries'])) {
+        $c_parts = preg_split('/\s*[,;]\s*/', $pub['countries']);
+        foreach ($c_parts as $cp) {
+            $cp = trim($cp);
+            if (!empty($cp) && strcasecmp($cp, 'Thailand') !== 0) {
+                $country_list[$cp] = ($country_list[$cp] ?? 0) + 1;
+            }
+        }
+    }
 }
 ksort($yearly_data);
+arsort($researcher_sdgs);
+arsort($country_list);
+
+$q1_q2_total = $quartile_counts['Q1'] + $quartile_counts['Q2'];
+$pub_total = count($publications);
+$q1_q2_pct = $pub_total > 0 ? round(($q1_q2_total / $pub_total) * 100) : 0;
+
+$avg_rcr = !empty($rcr_list) ? (array_sum($rcr_list) / count($rcr_list)) : null;
+$max_rcr = !empty($rcr_list) ? max($rcr_list) : null;
 
 // Prepare Chart.js data
 $chart_years = array_keys($yearly_data);
@@ -136,6 +181,94 @@ include_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Executive Highlights (Quartiles, SDGs, RCR, Global Network) -->
+<?php if (!empty($publications)): ?>
+<div class="glass-panel animate-fade-in" style="padding: 16px 22px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; align-items: start; border-left: 3px solid var(--color-primary); background: rgba(255,255,255,0.02);">
+    <!-- Col 1: Quartiles -->
+    <div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+            <i class="fa-solid fa-award" style="color: #10b981;"></i> ระดับวารสาร (Quartiles)
+        </div>
+        <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+            <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q1: <?php echo $quartile_counts['Q1']; ?></span>
+            <span class="badge" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q2: <?php echo $quartile_counts['Q2']; ?></span>
+            <span class="badge" style="background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q3: <?php echo $quartile_counts['Q3']; ?></span>
+            <span class="badge" style="background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); font-weight: 700; font-size: 0.75rem; padding: 2px 7px;">Q4: <?php echo $quartile_counts['Q4']; ?></span>
+        </div>
+        <?php if ($q1_q2_total > 0): ?>
+            <div style="font-size: 0.7rem; color: #10b981; margin-top: 4px; font-family: var(--font-eng); font-weight: 600;">
+                ★ Q1+Q2 คิดเป็น <?php echo $q1_q2_pct; ?>%
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Col 2: Top SDGs -->
+    <div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+            <i class="fa-solid fa-bullseye" style="color: var(--color-accent);"></i> SDGs เชี่ยวชาญหลัก
+        </div>
+        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+            <?php if (!empty($researcher_sdgs)): ?>
+                <?php 
+                $top_sdgs = array_slice($researcher_sdgs, 0, 2, true);
+                foreach ($top_sdgs as $sdg_num => $cnt): 
+                    $sdg_info = get_sdg_info($sdg_num);
+                ?>
+                    <span class="badge" style="background: <?php echo $sdg_info['color'] ?? '#3b82f6'; ?>22; color: <?php echo $sdg_info['color'] ?? '#3b82f6'; ?>; border: 1px solid <?php echo $sdg_info['color'] ?? '#3b82f6'; ?>44; font-size: 0.72rem; font-weight: 600; padding: 2px 7px;">
+                        SDG <?php echo $sdg_num; ?> (<?php echo $cnt; ?>)
+                    </span>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <span style="font-size: 0.75rem; color: var(--color-text-muted);">-</span>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Col 3: RCR & Global Impact -->
+    <div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+            <i class="fa-solid fa-chart-line" style="color: #60a5fa;"></i> ดัชนีอ้างอิงสากล (NIH RCR)
+        </div>
+        <?php if ($avg_rcr !== null): ?>
+            <div style="font-size: 0.82rem; font-family: var(--font-eng); font-weight: 600; color: var(--color-text-main);">
+                เฉลี่ย <strong style="color: #10b981;"><?php echo number_format($avg_rcr, 2); ?></strong> 
+                <span style="color: var(--color-text-muted); font-size: 0.72rem; font-weight: 400; font-family: var(--font-thai);">| สูงสุด <strong style="color: #10b981; font-family: var(--font-eng);"><?php echo number_format($max_rcr, 2); ?></strong></span>
+            </div>
+            <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 2px;">
+                <?php echo $avg_rcr >= 1.0 ? '<span style="color:#10b981;">● สูงกว่าเกณฑ์มาตรฐานโลก</span>' : '● อยู่ในเกณฑ์มาตรฐาน'; ?>
+            </div>
+        <?php else: ?>
+            <span style="font-size: 0.75rem; color: var(--color-text-muted);">-</span>
+        <?php endif; ?>
+    </div>
+
+    <!-- Col 4: Top International Collaborations -->
+    <div>
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 600;">
+            <i class="fa-solid fa-globe" style="color: #fbbf24;"></i> เครือข่ายนานาชาติ
+        </div>
+        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+            <?php if (!empty($country_list)): ?>
+                <?php 
+                $top_countries = array_slice($country_list, 0, 2, true);
+                foreach ($top_countries as $c_name => $c_cnt): 
+                    $c_flag = get_country_flag_url($c_name);
+                ?>
+                    <span class="badge" style="font-size: 0.72rem; padding: 2px 7px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass);">
+                        <?php if ($c_flag): ?>
+                            <img src="<?php echo $c_flag; ?>" style="width: 13px; height: 9px; vertical-align: middle; border-radius: 1px; margin-right: 3px;" alt="" />
+                        <?php endif; ?>
+                        <?php echo htmlspecialchars($c_name); ?> (<?php echo $c_cnt; ?>)
+                    </span>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <span style="font-size: 0.72rem; color: var(--color-text-muted); font-style: italic;">งานวิจัยในประเทศ</span>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Main Details Layout Grid -->
 <div class="main-grid animate-fade-in" style="animation-delay: 0.15s;">
