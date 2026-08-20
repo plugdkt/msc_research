@@ -232,6 +232,21 @@ $unique_issn_count = count($seen_clean_issns);
 $issn_fetched_count = (int)$pdo->query("SELECT COUNT(DISTINCT issn) FROM `journal_quartiles` WHERE source = 'scopus_citescore_api'")->fetchColumn();
 $issn_pending_count = max(0, $unique_issn_count - $issn_fetched_count);
 
+// Yearly Quartile Distribution across publications
+$yearly_quartiles = $pdo->query("
+    SELECT publish_year,
+           COUNT(*) as total_pubs,
+           SUM(CASE WHEN quartile = 'Q1' THEN 1 ELSE 0 END) as q1_count,
+           SUM(CASE WHEN quartile = 'Q2' THEN 1 ELSE 0 END) as q2_count,
+           SUM(CASE WHEN quartile = 'Q3' THEN 1 ELSE 0 END) as q3_count,
+           SUM(CASE WHEN quartile = 'Q4' THEN 1 ELSE 0 END) as q4_count,
+           SUM(CASE WHEN quartile IS NULL OR quartile = '' OR quartile = 'N/A' THEN 1 ELSE 0 END) as no_q_count
+    FROM `publications`
+    WHERE publish_year IS NOT NULL AND publish_year != ''
+    GROUP BY publish_year
+    ORDER BY publish_year DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+
 ?>
 
 <div class="hero glass-panel animate-fade-in" style="padding: 30px 20px; margin-bottom: 30px;">
@@ -333,6 +348,103 @@ $issn_pending_count = max(0, $unique_issn_count - $issn_fetched_count);
         <div id="quartile-log" style="margin-top: 12px; max-height: 180px; overflow-y: auto; font-size: 0.75rem; color: var(--color-text-muted); background: rgba(0,0,0,0.15); border-radius: 8px; padding: 10px; display: flex; flex-direction: column-reverse; gap: 4px;"></div>
     </div>
 </div>
+
+<!-- Yearly Quartile Distribution Table -->
+<?php if (!empty($yearly_quartiles)): ?>
+<div class="glass-panel animate-fade-in" style="padding: 25px; margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+        <div>
+            <h3 style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-chart-column" style="color: var(--color-primary);"></i>
+                <span>สรุปจำนวนผลงานและ Quartiles แยกตามปีที่ตีพิมพ์ (Publication Years)</span>
+            </h3>
+            <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 4px 0 0 0;">
+                แสดงสถานะ Quartile ย้อนหลังตามปีที่ตีพิมพ์จริงของบทความ (ครอบคลุม <?php echo count($yearly_quartiles); ?> ปี)
+            </p>
+        </div>
+        <span class="badge" style="font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); padding: 4px 10px; border-radius: 6px; font-family: var(--font-eng);">
+            <?php echo end($yearly_quartiles)['publish_year'] ?? ''; ?> – <?php echo $yearly_quartiles[0]['publish_year'] ?? ''; ?>
+        </span>
+    </div>
+
+    <div style="overflow-x: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-glass); border-radius: 10px;">
+        <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.85rem;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-glass); background: rgba(255,255,255,0.02); color: var(--color-text-muted); font-size: 0.78rem;">
+                    <th style="padding: 12px 14px; text-align: left;">ปีที่ตีพิมพ์ (Year)</th>
+                    <th style="padding: 12px 10px; font-family: var(--font-eng);">ผลงานทั้งหมด</th>
+                    <th style="padding: 12px 10px; color: #10b981;">Q1</th>
+                    <th style="padding: 12px 10px; color: #60a5fa;">Q2</th>
+                    <th style="padding: 12px 10px; color: #fbbf24;">Q3</th>
+                    <th style="padding: 12px 10px; color: #f87171;">Q4</th>
+                    <th style="padding: 12px 10px; color: var(--color-text-muted);">ยังไม่มี Q</th>
+                    <th style="padding: 12px 14px; text-align: right;">สัดส่วน Q1 + Q2</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php 
+                $sum_total = 0;
+                $sum_q1 = 0;
+                $sum_q2 = 0;
+                $sum_q3 = 0;
+                $sum_q4 = 0;
+                $sum_no_q = 0;
+                foreach ($yearly_quartiles as $yq): 
+                    $sum_total += (int)$yq['total_pubs'];
+                    $sum_q1 += (int)$yq['q1_count'];
+                    $sum_q2 += (int)$yq['q2_count'];
+                    $sum_q3 += (int)$yq['q3_count'];
+                    $sum_q4 += (int)$yq['q4_count'];
+                    $sum_no_q += (int)$yq['no_q_count'];
+                    $top_tier_pct = $yq['total_pubs'] > 0 ? round((($yq['q1_count'] + $yq['q2_count']) / $yq['total_pubs']) * 100, 1) : 0;
+                ?>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 10px 14px; text-align: left; font-weight: 600; font-family: var(--font-eng); color: var(--color-text-main);">
+                        <?php echo htmlspecialchars($yq['publish_year']); ?>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-eng); font-weight: 600;">
+                        <?php echo number_format($yq['total_pubs']); ?>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-eng); font-weight: 700; color: #10b981;">
+                        <?php echo $yq['q1_count'] > 0 ? number_format($yq['q1_count']) : '<span style="color:rgba(255,255,255,0.15);">-</span>'; ?>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-eng); font-weight: 700; color: #60a5fa;">
+                        <?php echo $yq['q2_count'] > 0 ? number_format($yq['q2_count']) : '<span style="color:rgba(255,255,255,0.15);">-</span>'; ?>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-eng); font-weight: 700; color: #fbbf24;">
+                        <?php echo $yq['q3_count'] > 0 ? number_format($yq['q3_count']) : '<span style="color:rgba(255,255,255,0.15);">-</span>'; ?>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-eng); font-weight: 700; color: #f87171;">
+                        <?php echo $yq['q4_count'] > 0 ? number_format($yq['q4_count']) : '<span style="color:rgba(255,255,255,0.15);">-</span>'; ?>
+                    </td>
+                    <td style="padding: 10px; font-family: var(--font-eng); color: var(--color-text-muted);">
+                        <?php echo $yq['no_q_count'] > 0 ? number_format($yq['no_q_count']) : '<span style="color:rgba(255,255,255,0.15);">-</span>'; ?>
+                    </td>
+                    <td style="padding: 10px 14px; text-align: right; font-family: var(--font-eng); font-weight: 600; color: <?php echo $top_tier_pct >= 70 ? '#10b981' : ($top_tier_pct >= 50 ? '#60a5fa' : '#fbbf24'); ?>;">
+                        <?php echo $top_tier_pct; ?>%
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <?php 
+                $grand_top_pct = $sum_total > 0 ? round((($sum_q1 + $sum_q2) / $sum_total) * 100, 1) : 0;
+                ?>
+                <tr style="background: rgba(255,255,255,0.05); font-weight: 700; border-top: 2px solid var(--border-glass); color: var(--color-text-main);">
+                    <td style="padding: 12px 14px; text-align: left;">รวมทั้งหมด</td>
+                    <td style="padding: 12px 10px; font-family: var(--font-eng);"><?php echo number_format($sum_total); ?></td>
+                    <td style="padding: 12px 10px; font-family: var(--font-eng); color: #10b981;"><?php echo number_format($sum_q1); ?></td>
+                    <td style="padding: 12px 10px; font-family: var(--font-eng); color: #60a5fa;"><?php echo number_format($sum_q2); ?></td>
+                    <td style="padding: 12px 10px; font-family: var(--font-eng); color: #fbbf24;"><?php echo number_format($sum_q3); ?></td>
+                    <td style="padding: 12px 10px; font-family: var(--font-eng); color: #f87171;"><?php echo number_format($sum_q4); ?></td>
+                    <td style="padding: 12px 10px; font-family: var(--font-eng); color: var(--color-text-muted);"><?php echo number_format($sum_no_q); ?></td>
+                    <td style="padding: 12px 14px; text-align: right; font-family: var(--font-eng); color: #10b981; font-size: 1rem;"><?php echo $grand_top_pct; ?>%</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
 
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; margin-bottom: 30px; flex-wrap: wrap;">
     <!-- Import Form -->
