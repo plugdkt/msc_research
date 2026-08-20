@@ -3,7 +3,8 @@
 // Batch auto-classify ALL unclassified publications against the SDG
 // keyphrase dictionary in one click. Unlike admin/suggest_sdgs.php (admin
 // reviews a suggestion, then saves it manually), this endpoint WRITES
-// sdg_primary/sdg_secondary/sdg_rationale directly and unattended - the
+// sdg_primary/sdg_secondary/sdg_tertiary/sdg_rationale directly and
+// unattended - the
 // user explicitly asked for one-click, whole-faculty batch classification,
 // which isn't practical to review publication-by-publication.
 //
@@ -38,13 +39,17 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
-// Raised from an initial 0.4 to 1.0 per server-side review (2026-08-19):
-// this data is published on the faculty's public reports, so a strict bar
-// (effectively "at least one full-phrase keyphrase match", since a single
-// full match scores its full rel weight and most rel values run close to
-// 1.0) matters more than covering every publication automatically. Below
-// this, a publication is left Unclassified for manual review instead.
-const MIN_AUTO_APPLY_SCORE = 1.0;
+// Threshold history: 0.4 (initial) -> 1.0 (2026-08-19 server-side review,
+// "≥1.0 or full-phrase match") -> >0.5 (2026-08-20, faculty leadership
+// decision: since 1.0 is a full-phrase match's typical score, "more than
+// half of a full match" is confident enough to auto-apply while still
+// leaving weak keyword coincidences for manual review). Comparison is
+// STRICT greater-than per that instruction, not >=.
+const MIN_AUTO_APPLY_SCORE = 0.5;
+
+// Up to 3 SDGs (primary/secondary/tertiary) may be auto-applied per
+// publication - each one only if its own score clears MIN_AUTO_APPLY_SCORE.
+const MAX_AUTO_APPLY_SDGS = 3;
 
 $action = $_GET['action'] ?? '';
 
@@ -53,6 +58,7 @@ if ($action === 'list') {
         SELECT id, title FROM `publications`
         WHERE (sdg_primary IS NULL OR sdg_primary = '')
           AND (sdg_secondary IS NULL OR sdg_secondary = '')
+          AND (sdg_tertiary IS NULL OR sdg_tertiary = '')
         ORDER BY id ASC
     ");
     $rows = $stmt->fetchAll();
@@ -73,7 +79,7 @@ if ($action === 'process') {
         exit;
     }
 
-    $stmt = $pdo->prepare("SELECT id, title, doi, abstract, keywords, sdg_primary, sdg_secondary FROM `publications` WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, title, doi, abstract, keywords, sdg_primary, sdg_secondary, sdg_tertiary FROM `publications` WHERE id = ?");
     $stmt->execute([$pub_id]);
     $pub = $stmt->fetch();
     if (!$pub) {
@@ -84,7 +90,7 @@ if ($action === 'process') {
 
     // Never overwrite an existing SDG tag - a human (or an earlier
     // auto-classify pass) already made this call.
-    if (!empty($pub['sdg_primary']) || !empty($pub['sdg_secondary'])) {
+    if (!empty($pub['sdg_primary']) || !empty($pub['sdg_secondary']) || !empty($pub['sdg_tertiary'])) {
         echo json_encode(['id' => $pub_id, 'status' => 'skipped', 'reason' => 'มีการจำแนก SDG อยู่แล้ว']);
         exit;
     }
@@ -115,38 +121,45 @@ if ($action === 'process') {
 
     $results = score_publication_sdgs($pub['title'], $pub['keywords'], $pub['abstract']);
 
-    if (empty($results) || $results[0]['score'] < MIN_AUTO_APPLY_SCORE) {
+    // Strict "more than" (not >=) per the 2026-08-20 threshold decision.
+    if (empty($results) || !($results[0]['score'] > MIN_AUTO_APPLY_SCORE)) {
         echo json_encode([
             'id' => $pub_id,
             'status' => 'low_confidence',
-            'reason' => empty($results) ? 'ไม่พบคำสำคัญที่ตรงกับ SDG ใดเลย' : ('คะแนนต่ำกว่าเกณฑ์ (' . round($results[0]['score'], 2) . ' < ' . MIN_AUTO_APPLY_SCORE . ')'),
+            'reason' => empty($results) ? 'ไม่พบคำสำคัญที่ตรงกับ SDG ใดเลย' : ('คะแนนต่ำกว่าเกณฑ์ (' . round($results[0]['score'], 2) . ' ไม่มากกว่า ' . MIN_AUTO_APPLY_SCORE . ')'),
             'top_score' => empty($results) ? 0 : round($results[0]['score'], 2),
         ]);
         exit;
     }
 
-    $primary_code = 'SDG ' . $results[0]['num'];
-    $secondary_code = null;
-    if (isset($results[1]) && $results[1]['score'] >= MIN_AUTO_APPLY_SCORE) {
-        $secondary_code = 'SDG ' . $results[1]['num'];
+    // Take up to MAX_AUTO_APPLY_SDGS ranks, each gated individually by the
+    // same strict threshold (a lower-ranked SDG never gets a pass just
+    // because the top one cleared the bar).
+    $qualified = array_values(array_filter(
+        array_slice($results, 0, MAX_AUTO_APPLY_SDGS),
+        function ($r) { return $r['score'] > MIN_AUTO_APPLY_SCORE; }
+    ));
+
+    $slot_codes = [null, null, null];
+    foreach ($qualified as $i => $r) {
+        $slot_codes[$i] = 'SDG ' . $r['num'];
     }
+    [$primary_code, $secondary_code, $tertiary_code] = $slot_codes;
 
     $rationale_for = function ($r) {
         $parts = array_map(function ($m) {
             return $m['k'] . ' (' . ($m['full'] ? 'ตรงทั้งวลี' : 'ตรงบางส่วน') . ')';
         }, array_slice($r['matched'], 0, 5));
-        return 'SDG ' . $r['num'] . ': ' . implode(', ', $parts);
+        return 'SDG ' . $r['num'] . ' (คะแนน ' . round($r['score'], 2) . '): ' . implode(', ', $parts);
     };
-    $rationale_parts = [$rationale_for($results[0])];
-    if ($secondary_code) {
-        $rationale_parts[] = $rationale_for($results[1]);
-    }
+    $rationale_parts = array_map($rationale_for, $qualified);
     $rationale = '[Auto-Classify ' . date('Y-m-d') . '] ' . implode(' | ', $rationale_parts);
 
-    $update = $pdo->prepare("UPDATE `publications` SET sdg_primary = :primary, sdg_secondary = :secondary, sdg_rationale = :rationale WHERE id = :id");
+    $update = $pdo->prepare("UPDATE `publications` SET sdg_primary = :primary, sdg_secondary = :secondary, sdg_tertiary = :tertiary, sdg_rationale = :rationale WHERE id = :id");
     $update->execute([
         ':primary' => $primary_code,
         ':secondary' => $secondary_code,
+        ':tertiary' => $tertiary_code,
         ':rationale' => $rationale,
         ':id' => $pub_id,
     ]);
@@ -156,6 +169,7 @@ if ($action === 'process') {
         'status' => 'applied',
         'sdg_primary' => $primary_code,
         'sdg_secondary' => $secondary_code,
+        'sdg_tertiary' => $tertiary_code,
         'top_score' => round($results[0]['score'], 2),
     ]);
     exit;

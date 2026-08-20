@@ -16,7 +16,7 @@ for ($i = 1; $i <= 17; $i++) {
 $placeholders = implode(',', array_fill(0, count($valid_codes), '?'));
 
 try {
-    foreach (['sdg_primary', 'sdg_secondary'] as $col) {
+    foreach (['sdg_primary', 'sdg_secondary', 'sdg_tertiary'] as $col) {
         $stmt = $pdo->prepare("
             SELECT id, `{$col}` AS value FROM `publications`
             WHERE `{$col}` IS NOT NULL AND `{$col}` != '' AND `{$col}` NOT IN ({$placeholders})

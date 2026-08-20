@@ -71,7 +71,7 @@ if ($selected_quartile !== '') {
 }
 
 if ($selected_sdg !== '') {
-    $conditions[] = "(p.sdg_primary = :sdg_filter OR p.sdg_secondary = :sdg_filter)";
+    $conditions[] = "(p.sdg_primary = :sdg_filter OR p.sdg_secondary = :sdg_filter OR p.sdg_tertiary = :sdg_filter)";
     $params['sdg_filter'] = $selected_sdg;
 }
 
@@ -318,6 +318,9 @@ include_once __DIR__ . '/includes/header.php';
                                 <?php endif; ?>
                                 <?php if (!empty($pub['sdg_secondary'])): ?>
                                     <?php echo render_sdg_badge($pub['sdg_secondary'], false, '0.72rem'); ?>
+                                <?php endif; ?>
+                                <?php if (!empty($pub['sdg_tertiary'])): ?>
+                                    <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.72rem'); ?>
                                 <?php endif; ?>
                             </div>
                             <?php if ($pub['citation_count'] > 0): ?>

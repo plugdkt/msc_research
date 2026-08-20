@@ -627,6 +627,7 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
             $funding_amount = !empty($data['funding_amount']) && is_numeric($data['funding_amount']) ? (float)$data['funding_amount'] : null;
             $sdg_primary = !empty($data['sdg_primary']) ? trim($data['sdg_primary']) : null;
             $sdg_secondary = !empty($data['sdg_secondary']) ? trim($data['sdg_secondary']) : null;
+            $sdg_tertiary = !empty($data['sdg_tertiary']) ? trim($data['sdg_tertiary']) : null;
             $sdg_rationale = !empty($data['sdg_rationale']) ? trim($data['sdg_rationale']) : null;
             $corresponding_author_id = !empty($data['corresponding_author_id']) ? (int)$data['corresponding_author_id'] : null;
             
@@ -652,6 +653,7 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
                         `funding_amount` = COALESCE(:funding_amount, `funding_amount`),
                         `sdg_primary` = COALESCE(:sdg_primary, `sdg_primary`),
                         `sdg_secondary` = COALESCE(:sdg_secondary, `sdg_secondary`),
+                        `sdg_tertiary` = COALESCE(:sdg_tertiary, `sdg_tertiary`),
                         `sdg_rationale` = COALESCE(:sdg_rationale, `sdg_rationale`),
                         `corresponding_author_id` = COALESCE(:corresponding_author_id, `corresponding_author_id`)
                     WHERE `id` = :id
@@ -673,6 +675,7 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
                     ':funding_amount' => $funding_amount,
                     ':sdg_primary' => $sdg_primary,
                     ':sdg_secondary' => $sdg_secondary,
+                    ':sdg_tertiary' => $sdg_tertiary,
                     ':sdg_rationale' => $sdg_rationale,
                     ':corresponding_author_id' => $corresponding_author_id,
                     ':id' => $pubId
@@ -680,10 +683,10 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
             } else {
                 // Insert new
                 $stmtInsert = $pdo->prepare("
-                    INSERT INTO `publications` 
-                    (title, authors, journal_name, journal_issn, quartile, countries, corresponding_author_id, funding_sponsor, funding_no, funding_amount, sdg_primary, sdg_secondary, sdg_rationale, publish_year, publish_date, doi, citation_count, source, source_id, url, abstract)
-                    VALUES 
-                    (:title, :authors, :journal_name, :journal_issn, :quartile, :countries, :corresponding_author_id, :funding_sponsor, :funding_no, :funding_amount, :sdg_primary, :sdg_secondary, :sdg_rationale, :publish_year, :publish_date, :doi, :citation_count, :source, :source_id, :url, :abstract)
+                    INSERT INTO `publications`
+                    (title, authors, journal_name, journal_issn, quartile, countries, corresponding_author_id, funding_sponsor, funding_no, funding_amount, sdg_primary, sdg_secondary, sdg_tertiary, sdg_rationale, publish_year, publish_date, doi, citation_count, source, source_id, url, abstract)
+                    VALUES
+                    (:title, :authors, :journal_name, :journal_issn, :quartile, :countries, :corresponding_author_id, :funding_sponsor, :funding_no, :funding_amount, :sdg_primary, :sdg_secondary, :sdg_tertiary, :sdg_rationale, :publish_year, :publish_date, :doi, :citation_count, :source, :source_id, :url, :abstract)
                 ");
                 $stmtInsert->execute([
                     ':title' => trim($data['title']),
@@ -698,6 +701,7 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
                     ':funding_amount' => $funding_amount,
                     ':sdg_primary' => $sdg_primary,
                     ':sdg_secondary' => $sdg_secondary,
+                    ':sdg_tertiary' => $sdg_tertiary,
                     ':sdg_rationale' => $sdg_rationale,
                     ':publish_year' => (int)$data['publish_year'],
                     ':publish_date' => !empty($data['publish_date']) ? $data['publish_date'] : null,

@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS `publications` (
     `keywords` TEXT NULL, -- Phase 6: author keywords from Scopus Abstract Retrieval API, for SDG keyword matching
     `sdg_primary` VARCHAR(50) NULL,
     `sdg_secondary` VARCHAR(50) NULL,
+    `sdg_tertiary` VARCHAR(50) NULL,
     `sdg_rationale` TEXT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

@@ -35,6 +35,7 @@ if (isset($_POST['import_single'])) {
     $funding_amount = !empty($_POST['funding_amount']) && is_numeric($_POST['funding_amount']) ? (float)$_POST['funding_amount'] : null;
     $sdg_primary = !empty($_POST['sdg_primary']) ? trim($_POST['sdg_primary']) : null;
     $sdg_secondary = !empty($_POST['sdg_secondary']) ? trim($_POST['sdg_secondary']) : null;
+    $sdg_tertiary = !empty($_POST['sdg_tertiary']) ? trim($_POST['sdg_tertiary']) : null;
     $sdg_rationale = !empty($_POST['sdg_rationale']) ? trim($_POST['sdg_rationale']) : null;
     $corresponding_author_id = !empty($_POST['corresponding_author_id']) ? (int)$_POST['corresponding_author_id'] : null;
 
@@ -55,6 +56,7 @@ if (isset($_POST['import_single'])) {
             'funding_amount' => $funding_amount,
             'sdg_primary' => $sdg_primary,
             'sdg_secondary' => $sdg_secondary,
+            'sdg_tertiary' => $sdg_tertiary,
             'sdg_rationale' => $sdg_rationale,
             'publish_year' => $publish_year,
             'publish_date' => $publish_date,
@@ -284,6 +286,17 @@ if (isset($_POST['import_csv'])) {
                 <div style="flex: 1;">
                     <label style="font-size: 0.8rem; color: var(--color-text-muted);">SDG รอง (Secondary SDG)</label>
                     <select name="sdg_secondary" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
+                        <option value="">— ไม่ระบุ —</option>
+                        <?php foreach (get_all_sdgs() as $code => $details): ?>
+                            <option value="<?php echo $code; ?>">
+                                <?php echo $code . ': ' . htmlspecialchars($details['th_name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.8rem; color: var(--color-text-muted);">SDG ลำดับ 3 (Tertiary SDG)</label>
+                    <select name="sdg_tertiary" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
                         <option value="">— ไม่ระบุ —</option>
                         <?php foreach (get_all_sdgs() as $code => $details): ?>
                             <option value="<?php echo $code; ?>">

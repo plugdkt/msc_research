@@ -89,9 +89,10 @@ function process_sdg_csv($pdo, $filePath) {
     $pdo->beginTransaction();
     try {
         $stmtUpdate = $pdo->prepare("
-            UPDATE `publications` 
-            SET `sdg_primary` = :sdg_primary, 
-                `sdg_secondary` = :sdg_secondary, 
+            UPDATE `publications`
+            SET `sdg_primary` = :sdg_primary,
+                `sdg_secondary` = :sdg_secondary,
+                `sdg_tertiary` = :sdg_tertiary,
                 `sdg_rationale` = :sdg_rationale
             WHERE `id` = :id
         ");
@@ -142,19 +143,21 @@ function process_sdg_csv($pdo, $filePath) {
                 return array_values(array_unique($codes));
             };
 
-            // The schema only has room for 2 (sdg_primary, sdg_secondary).
-            // Combine whatever codes were found across both source cells,
-            // keep the first 2 distinct ones, and preserve any overflow as a
-            // note in the rationale instead of silently discarding it.
+            // The schema has room for 3 (sdg_primary, sdg_secondary,
+            // sdg_tertiary). Combine whatever codes were found across both
+            // source cells, keep the first 3 distinct ones, and preserve any
+            // overflow as a note in the rationale instead of silently
+            // discarding it.
             $all_codes = array_values(array_unique(array_merge(
                 $extract_sdg_codes($sdg_primary),
                 $extract_sdg_codes($sdg_secondary)
             )));
-            $overflow_codes = array_slice($all_codes, 2);
+            $overflow_codes = array_slice($all_codes, 3);
             $sdg_primary = $all_codes[0] ?? null;
             $sdg_secondary = $all_codes[1] ?? null;
+            $sdg_tertiary = $all_codes[2] ?? null;
             if (!empty($overflow_codes)) {
-                $overflow_note = "[พบ SDG เพิ่มเติมจากไฟล์นำเข้าที่เก็บไม่ได้ (เก็บได้สูงสุด 2 ข้อ): " . implode(', ', $overflow_codes) . "]";
+                $overflow_note = "[พบ SDG เพิ่มเติมจากไฟล์นำเข้าที่เก็บไม่ได้ (เก็บได้สูงสุด 3 ข้อ): " . implode(', ', $overflow_codes) . "]";
                 $rationale = trim($rationale . ' ' . $overflow_note);
             }
 
@@ -186,6 +189,7 @@ function process_sdg_csv($pdo, $filePath) {
                 $stmtUpdate->execute([
                     ':sdg_primary' => $sdg_primary ?: null,
                     ':sdg_secondary' => $sdg_secondary ?: null,
+                    ':sdg_tertiary' => $sdg_tertiary ?: null,
                     ':sdg_rationale' => $rationale ?: null,
                     ':id' => $matched_id
                 ]);
@@ -222,7 +226,7 @@ function process_sdg_csv($pdo, $filePath) {
 $dict_info = get_sdg_dictionary_info();
 try {
     $total_pubs = (int)$pdo->query("SELECT COUNT(*) FROM `publications`")->fetchColumn();
-    $classified_pubs = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE (sdg_primary IS NOT NULL AND sdg_primary != '') OR (sdg_secondary IS NOT NULL AND sdg_secondary != '')")->fetchColumn();
+    $classified_pubs = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE (sdg_primary IS NOT NULL AND sdg_primary != '') OR (sdg_secondary IS NOT NULL AND sdg_secondary != '') OR (sdg_tertiary IS NOT NULL AND sdg_tertiary != '')")->fetchColumn();
 } catch (PDOException $e) {
     $total_pubs = 0;
     $classified_pubs = 0;
@@ -316,7 +320,7 @@ if (isset($_POST['upload_csv'])) {
                     <span>Auto-Classify All (จัดกลุ่ม SDG อัตโนมัติทั้งคณะ)</span>
                 </div>
                 <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 4px 0 0 0; line-height: 1.4;">
-                    <strong>เขียน SDG หลัก/รองอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (≥ <span id="min-score-label">1.0</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
+                    <strong>เขียน SDG สูงสุด 3 อันดับอัตโนมัติเฉพาะรายการที่คะแนนมั่นใจเพียงพอ</strong> (มากกว่า <span id="min-score-label">0.5</span>) — รายการที่คะแนนต่ำจะถูกข้ามไว้ให้ตรวจสอบด้วยตนเองผ่านปุ่ม "แนะนำ SDG" ทีละรายการแทน ไม่มีการเขียนทับรายการที่จำแนกไว้แล้ว
                 </p>
             </div>
             <div style="display:flex; gap:8px; flex-shrink:0;">

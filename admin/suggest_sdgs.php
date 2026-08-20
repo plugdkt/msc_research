@@ -72,7 +72,7 @@ if (empty($pub['abstract']) && empty($pub['keywords']) && !empty($pub['doi'])) {
 }
 
 $results = score_publication_sdgs($pub['title'], $pub['keywords'], $pub['abstract']);
-$top = array_slice($results, 0, 2);
+$top = array_slice($results, 0, 3);
 
 $suggestions = array_map(function ($r) {
     $rationale_parts = array_map(function ($m) {

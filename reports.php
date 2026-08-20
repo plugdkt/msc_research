@@ -375,7 +375,7 @@ if ($selected_year !== '') {
 $quartile_where = !empty($quartile_pub_conditions) ? "WHERE " . implode(" AND ", $quartile_pub_conditions) : "";
 
 $stmtAllPubs = $pdo->prepare("
-    SELECT p.id, p.title, p.authors, p.journal_name, p.publish_year, p.doi, p.url, p.quartile, p.source, p.citation_count, p.countries, p.funding_sponsor, p.funding_no, p.funding_amount, p.sdg_primary, p.sdg_secondary, p.sdg_rationale,
+    SELECT p.id, p.title, p.authors, p.journal_name, p.publish_year, p.doi, p.url, p.quartile, p.source, p.citation_count, p.countries, p.funding_sponsor, p.funding_no, p.funding_amount, p.sdg_primary, p.sdg_secondary, p.sdg_tertiary, p.sdg_rationale,
            GROUP_CONCAT(DISTINCT CONCAT(r2.title_th, ' ', r2.first_name_th, ' ', r2.last_name_th, '||', r2.first_name_en, '||', r2.last_name_en) SEPARATOR '|||') AS linked_researchers
     FROM researcher_publications rp
     JOIN researchers r ON rp.researcher_id = r.id
@@ -487,6 +487,9 @@ foreach ($filtered_publications as $pub) {
     }
     if (!empty($pub['sdg_secondary'])) {
         $sdgs[] = trim($pub['sdg_secondary']);
+    }
+    if (!empty($pub['sdg_tertiary'])) {
+        $sdgs[] = trim($pub['sdg_tertiary']);
     }
 
     $sdgs = array_unique($sdgs);
@@ -1634,6 +1637,9 @@ include_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                     <?php if (!empty($pub['sdg_secondary'])): ?>
                                         <?php echo render_sdg_badge($pub['sdg_secondary'], false, '0.68rem'); ?>
+                                    <?php endif; ?>
+                                    <?php if (!empty($pub['sdg_tertiary'])): ?>
+                                        <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.68rem'); ?>
                                     <?php endif; ?>
                                 </div>
 

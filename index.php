@@ -435,6 +435,9 @@ include_once __DIR__ . '/includes/header.php';
                                 <?php if (!empty($pub['sdg_secondary'])): ?>
                                     <?php echo render_sdg_badge($pub['sdg_secondary'], false); ?>
                                 <?php endif; ?>
+                                <?php if (!empty($pub['sdg_tertiary'])): ?>
+                                    <?php echo render_sdg_badge($pub['sdg_tertiary'], false); ?>
+                                <?php endif; ?>
                             </div>
                             
                             <div style="display: flex; gap: 15px; align-items: center;">

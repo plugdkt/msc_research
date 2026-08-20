@@ -70,6 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $funding_amount = !empty($_POST['funding_amount']) && is_numeric($_POST['funding_amount']) ? (float)$_POST['funding_amount'] : null;
     $sdg_primary = !empty($_POST['sdg_primary']) ? trim($_POST['sdg_primary']) : null;
     $sdg_secondary = !empty($_POST['sdg_secondary']) ? trim($_POST['sdg_secondary']) : null;
+    $sdg_tertiary = !empty($_POST['sdg_tertiary']) ? trim($_POST['sdg_tertiary']) : null;
     $sdg_rationale = !empty($_POST['sdg_rationale']) ? trim($_POST['sdg_rationale']) : null;
     $corresponding_author_id = !empty($_POST['corresponding_author_id']) ? (int)$_POST['corresponding_author_id'] : null;
     
@@ -105,6 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         funding_amount = :funding_amount,
                         sdg_primary = :sdg_primary,
                         sdg_secondary = :sdg_secondary,
+                        sdg_tertiary = :sdg_tertiary,
                         sdg_rationale = :sdg_rationale,
                         publish_year = :publish_year, 
                         publish_date = :publish_date, 
@@ -127,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':funding_amount' => $funding_amount,
                     ':sdg_primary' => $sdg_primary,
                     ':sdg_secondary' => $sdg_secondary,
+                    ':sdg_tertiary' => $sdg_tertiary,
                     ':sdg_rationale' => $sdg_rationale,
                     ':publish_year' => $publish_year,
                     ':publish_date' => $publish_date,
@@ -336,6 +339,17 @@ try {
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 5px;">SDG ลำดับ 3 (Tertiary SDG)</label>
+                        <select name="sdg_tertiary" id="sdg_tertiary_select" class="search-input" style="padding: 8px 12px; height: auto; background: rgba(0,0,0,0.25);">
+                            <option value="">— ไม่ระบุ —</option>
+                            <?php foreach (get_all_sdgs() as $code => $details): ?>
+                                <option value="<?php echo $code; ?>" <?php echo (($edit_pub['sdg_tertiary'] ?? '') === $code) ? 'selected' : ''; ?>>
+                                    <?php echo $code . ': ' . htmlspecialchars($details['th_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
 
                 <div>
@@ -453,13 +467,16 @@ try {
                                         <i class="fa-solid fa-envelope-circle-check"></i> ผู้ประสานงาน (Corresponding): <strong><?php echo htmlspecialchars($pub['corresponding_author_name']); ?></strong>
                                     </div>
                                 <?php endif; ?>
-                                <?php if (!empty($pub['sdg_primary']) || !empty($pub['sdg_secondary'])): ?>
+                                <?php if (!empty($pub['sdg_primary']) || !empty($pub['sdg_secondary']) || !empty($pub['sdg_tertiary'])): ?>
                                     <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
                                         <?php if (!empty($pub['sdg_primary'])): ?>
                                             <?php echo render_sdg_badge($pub['sdg_primary'], true, '0.72rem'); ?>
                                         <?php endif; ?>
                                         <?php if (!empty($pub['sdg_secondary'])): ?>
                                             <?php echo render_sdg_badge($pub['sdg_secondary'], false, '0.72rem'); ?>
+                                        <?php endif; ?>
+                                        <?php if (!empty($pub['sdg_tertiary'])): ?>
+                                            <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.72rem'); ?>
                                         <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
@@ -529,6 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsEl = document.getElementById('suggest-sdg-results');
     const primarySelect = document.getElementById('sdg_primary_select');
     const secondarySelect = document.getElementById('sdg_secondary_select');
+    const tertiarySelect = document.getElementById('sdg_tertiary_select');
     const rationaleInput = document.getElementById('sdg_rationale_input');
 
     function escapeHtml(s) {
@@ -560,20 +578,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     '<div style="font-weight: 600; color: ' + s.color + ';">' + escapeHtml(s.code) + ': ' + escapeHtml(s.name_th) + '</div>' +
                     '<div style="font-size: 0.78rem; color: var(--color-text-muted); margin-top: 2px;">คะแนน: ' + s.score.toFixed(2) + (s.rationale ? ' — จับคู่กับ: ' + escapeHtml(s.rationale) : '') + '</div>' +
                 '</div>' +
-                '<div style="display:flex; gap:6px;">' +
+                '<div style="display:flex; gap:6px; flex-wrap: wrap;">' +
                     '<button type="button" class="btn-premium apply-sdg-btn" data-slot="primary" data-idx="' + idx + '" style="padding: 5px 10px; font-size: 0.78rem;">ใช้เป็น SDG หลัก</button>' +
                     '<button type="button" class="btn-premium apply-sdg-btn" data-slot="secondary" data-idx="' + idx + '" style="padding: 5px 10px; font-size: 0.78rem; background: rgba(255,255,255,0.05);">ใช้เป็น SDG รอง</button>' +
+                    '<button type="button" class="btn-premium apply-sdg-btn" data-slot="tertiary" data-idx="' + idx + '" style="padding: 5px 10px; font-size: 0.78rem; background: rgba(255,255,255,0.05);">ใช้เป็น SDG ลำดับ 3</button>' +
                 '</div>';
             resultsEl.appendChild(div);
         });
 
+        const slotSelects = { primary: primarySelect, secondary: secondarySelect, tertiary: tertiarySelect };
         resultsEl.querySelectorAll('.apply-sdg-btn').forEach(b => {
             b.addEventListener('click', () => {
                 const s = data.suggestions[parseInt(b.dataset.idx, 10)];
-                const select = b.dataset.slot === 'primary' ? primarySelect : secondarySelect;
+                const select = slotSelects[b.dataset.slot];
+                if (!select) return;
                 select.value = s.code;
                 if (rationaleInput.value.trim() === '') {
-                    rationaleInput.value = s.rationale ? (s.code + ': ' + s.rationale) : ('แนะนำโดยระบบจากคำสำคัญ (' + s.code + ')');
+                    rationaleInput.value = s.rationale ? (s.code + ' (คะแนน ' + s.score.toFixed(2) + '): ' + s.rationale) : ('แนะนำโดยระบบจากคำสำคัญ (' + s.code + ', คะแนน ' + s.score.toFixed(2) + ')');
                 }
             });
         });
