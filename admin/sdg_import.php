@@ -500,6 +500,7 @@ if (isset($_POST['upload_csv'])) {
 </div>
 
 <script>
+const CSRF_TOKEN = "<?php echo htmlspecialchars(get_csrf_token()); ?>";
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('auto-classify-start-btn');
     const stopBtn = document.getElementById('auto-classify-stop-btn');
@@ -580,7 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statusText.textContent = 'กำลังประมวลผล: ' + (item.title || ('#' + item.id));
 
             try {
-                const resp = await fetch('auto_classify_sdgs.php?action=process&id=' + encodeURIComponent(item.id));
+                const resp = await fetch('auto_classify_sdgs.php?action=process&id=' + encodeURIComponent(item.id), {
+                    headers: { 'X-CSRF-Token': CSRF_TOKEN }
+                });
                 const data = await resp.json();
                 const status = data.status || 'error';
                 counts[status] = (counts[status] || 0) + 1;

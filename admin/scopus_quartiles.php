@@ -7,6 +7,7 @@ $page_title = 'จัดการ Quartiles (Scopus) - Admin Panel';
 
 require_once __DIR__ . '/admin_header.php';
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../includes/functions.php';
 
 $message = '';
 $message_type = 'success';
@@ -554,6 +555,7 @@ $yearly_quartiles = $pdo->query("
 </div>
 
 <script>
+const CSRF_TOKEN = "<?php echo htmlspecialchars(get_csrf_token()); ?>";
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('quartile-start-btn');
     const refreshBtn = document.getElementById('quartile-refresh-btn');
@@ -630,7 +632,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statusText.textContent = 'กำลังประมวลผล ISSN: ' + item.issn;
 
             try {
-                const resp = await fetch('fetch_quartiles.php?action=process&issn=' + encodeURIComponent(item.issn));
+                const resp = await fetch('fetch_quartiles.php?action=process&issn=' + encodeURIComponent(item.issn), {
+                    headers: { 'X-CSRF-Token': CSRF_TOKEN }
+                });
                 const data = await resp.json();
                 const status = data.status || 'error';
                 counts[status] = (counts[status] || 0) + 1;

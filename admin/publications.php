@@ -552,6 +552,7 @@ try {
 
 <?php if ($edit_mode && $edit_pub): ?>
 <script>
+const CSRF_TOKEN = "<?php echo htmlspecialchars(get_csrf_token()); ?>";
 document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('suggest-sdg-btn');
     if (!btn) return;
@@ -617,7 +618,9 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.disabled = true;
         statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังวิเคราะห์...';
         resultsEl.innerHTML = '';
-        fetch('suggest_sdgs.php?id=' + encodeURIComponent(btn.dataset.pubId))
+        fetch('suggest_sdgs.php?id=' + encodeURIComponent(btn.dataset.pubId), {
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        })
             .then(r => r.json())
             .then(data => {
                 if (data.error) {
@@ -642,7 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
         rcrBtn.addEventListener('click', () => {
             rcrBtn.disabled = true;
             rcrStatusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังดึงข้อมูล...';
-            fetch('fetch_rcr.php?action=process&id=' + encodeURIComponent(rcrBtn.dataset.pubId))
+            fetch('fetch_rcr.php?action=process&id=' + encodeURIComponent(rcrBtn.dataset.pubId), {
+                headers: { 'X-CSRF-Token': CSRF_TOKEN }
+            })
                 .then(r => r.json())
                 .then(data => {
                     if (data.error) {

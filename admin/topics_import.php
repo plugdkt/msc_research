@@ -95,6 +95,7 @@ $pubs_pending = max(0, $pubs_with_doi - $pubs_checked);
 </div>
 
 <script>
+const CSRF_TOKEN = "<?php echo htmlspecialchars(get_csrf_token()); ?>";
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('topics-start-btn');
     const refreshBtn = document.getElementById('topics-refresh-btn');
@@ -176,7 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statusText.textContent = 'กำลังประมวลผล: ' + (item.title || ('#' + item.id));
 
             try {
-                const resp = await fetch('classify_topics.php?action=process&id=' + encodeURIComponent(item.id));
+                const resp = await fetch('classify_topics.php?action=process&id=' + encodeURIComponent(item.id), {
+                    headers: { 'X-CSRF-Token': CSRF_TOKEN }
+                });
                 const data = await resp.json();
                 const status = data.status || 'error';
                 counts[status] = (counts[status] || 0) + 1;

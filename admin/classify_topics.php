@@ -52,6 +52,12 @@ if ($action === 'list') {
 }
 
 if ($action === 'process') {
+    if (!verify_csrf_token($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {
+        http_response_code(403);
+        echo json_encode(['error' => 'CSRF token ไม่ถูกต้องหรือหมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่']);
+        exit;
+    }
+
     $pub_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     if ($pub_id <= 0) {
         http_response_code(400);

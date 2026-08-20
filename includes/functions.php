@@ -5,6 +5,46 @@
 require_once __DIR__ . '/../config/db.php';
 
 // ---------------------------------------------------------------------
+// CSRF protection for the batch/on-demand admin endpoints (SDG
+// Auto-Classify, Topic classification, RCR fetch, Quartile fetch, SDG
+// Suggest) added in Phases 6-9. These are all state-changing GET-based
+// AJAX endpoints - a logged-in admin who visits a malicious page while
+// their session is active could otherwise have one of these silently
+// triggered cross-site (e.g. via an <img>/fetch to a crafted URL), since
+// browsers attach session cookies to cross-site GETs automatically. A
+// per-session random token, sent as a custom header (not a URL query
+// param, to avoid it leaking via Referer logs) and checked with a
+// timing-safe comparison, closes that gap without changing these
+// endpoints' existing GET-based shape.
+// ---------------------------------------------------------------------
+
+/**
+ * Returns this session's CSRF token, generating one on first call.
+ */
+function get_csrf_token() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Verifies a submitted CSRF token against this session's token.
+ */
+function verify_csrf_token($submitted_token) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($_SESSION['csrf_token']) || empty($submitted_token)) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], (string)$submitted_token);
+}
+
+// ---------------------------------------------------------------------
 // Typed HTTP exceptions
 //
 // http_get() throws one of these instead of a plain RuntimeException so
