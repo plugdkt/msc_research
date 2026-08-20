@@ -837,38 +837,57 @@ include_once __DIR__ . '/includes/header.php';
                     <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($rcr_covered_count); ?> / <?php echo number_format(count($filtered_publications)); ?></div>
                 </div>
             </div>
-            <h4 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-trophy" style="color: #f59e0b;"></i> 10 อันดับผลงานที่มีค่า RCR สูงสุด
+            <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-trophy" style="color: #f59e0b;"></i> 10 อันดับผลงานที่มีค่า Relative Citation Ratio (RCR) สูงสุด
             </h4>
-            <div style="overflow-x: auto;">
+            <div style="overflow-x: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-glass); border-radius: 10px;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
                     <thead>
-                        <tr style="border-bottom: 2px solid var(--border-glass); color: var(--color-text-muted);">
-                            <th style="padding: 10px 8px; width: 45%;">ชื่อเรื่อง / วารสาร</th>
-                            <th style="padding: 10px 8px; width: 35%;">นักวิจัยในคณะ</th>
-                            <th style="padding: 10px 8px; text-align: right; width: 10%;">RCR</th>
-                            <th style="padding: 10px 8px; text-align: right; width: 10%;">เปอร์เซ็นไทล์</th>
+                        <tr style="border-bottom: 1px solid var(--border-glass); background: rgba(255,255,255,0.02); color: var(--color-text-muted); font-size: 0.78rem;">
+                            <th style="padding: 12px 10px; width: 50px; text-align: center;">อันดับ</th>
+                            <th style="padding: 12px 14px;">ชื่อเรื่อง / วารสาร</th>
+                            <th style="padding: 12px 14px; width: 260px;">นักวิจัยในคณะ</th>
+                            <th style="padding: 12px 14px; width: 100px; text-align: right;">RCR</th>
+                            <th style="padding: 12px 14px; width: 110px; text-align: right;">เปอร์เซ็นไทล์</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($rcr_top_publications as $rp): ?>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="padding: 12px 8px; vertical-align: top;">
+                        <?php 
+                        $rcr_rank = 1;
+                        foreach ($rcr_top_publications as $rp): 
+                            $rank_badge = '';
+                            if ($rcr_rank === 1) {
+                                $rank_badge = '<span style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:rgba(245,158,11,0.2); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); font-weight:700; font-size:0.78rem;">1</span>';
+                            } elseif ($rcr_rank === 2) {
+                                $rank_badge = '<span style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:rgba(148,163,184,0.2); color:#cbd5e1; border:1px solid rgba(148,163,184,0.4); font-weight:700; font-size:0.78rem;">2</span>';
+                            } elseif ($rcr_rank === 3) {
+                                $rank_badge = '<span style="display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:rgba(217,119,6,0.2); color:#f97316; border:1px solid rgba(217,119,6,0.4); font-weight:700; font-size:0.78rem;">3</span>';
+                            } else {
+                                $rank_badge = '<span style="display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:rgba(255,255,255,0.03); color:var(--color-text-muted); font-weight:600; font-size:0.75rem;">' . $rcr_rank . '</span>';
+                            }
+                        ?>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 12px 10px; text-align: center; vertical-align: middle;">
+                                <?php echo $rank_badge; ?>
+                            </td>
+                            <td style="padding: 12px 14px; vertical-align: middle;">
                                 <div>
                                     <?php if (!empty($rp['url'])): ?>
-                                        <a href="<?php echo htmlspecialchars($rp['url']); ?>" target="_blank" style="color: var(--color-text-main); font-weight: 500; text-decoration: none; line-height: 1.4;"><?php echo htmlspecialchars($rp['title']); ?></a>
+                                        <a href="<?php echo htmlspecialchars($rp['url']); ?>" target="_blank" style="color: var(--color-text-main); font-weight: 500; text-decoration: none; line-height: 1.45; transition: color 0.15s ease;" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='var(--color-text-main)'"><?php echo htmlspecialchars($rp['title']); ?></a>
                                     <?php else: ?>
-                                        <span style="font-weight: 500; line-height: 1.4;"><?php echo htmlspecialchars($rp['title']); ?></span>
+                                        <span style="font-weight: 500; line-height: 1.45;"><?php echo htmlspecialchars($rp['title']); ?></span>
                                     <?php endif; ?>
                                 </div>
-                                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 5px;">
+                                <div style="font-size: 0.76rem; color: var(--color-text-muted); margin-top: 4px; display: flex; align-items: center; gap: 8px;">
                                     <span style="font-style: italic; color: #94a3b8;"><?php echo htmlspecialchars($rp['journal_name'] ?? ''); ?></span>
-                                    <?php if (!empty($rp['publish_year'])): ?> (<?php echo htmlspecialchars($rp['publish_year']); ?>)<?php endif; ?>
+                                    <?php if (!empty($rp['publish_year'])): ?>
+                                        <span style="background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font-family: var(--font-eng);"><?php echo htmlspecialchars($rp['publish_year']); ?></span>
+                                    <?php endif; ?>
                                 </div>
                             </td>
-                            <td style="padding: 12px 8px; vertical-align: top;">
+                            <td style="padding: 12px 14px; vertical-align: middle;">
                                 <?php if (!empty($rp['linked_researchers'])): ?>
-                                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                    <div style="display: flex; flex-wrap: wrap; gap: 5px;">
                                         <?php 
                                         $linked = explode('|||', $rp['linked_researchers']);
                                         foreach ($linked as $lnk) {
@@ -880,7 +899,7 @@ include_once __DIR__ . '/includes/header.php';
                                             $role_badge = ($role === 'First Author') 
                                                 ? '<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3); padding:1px 4px; border-radius:3px; font-weight:600;">First</span>' 
                                                 : '<span style="font-size:0.65rem; background:rgba(255,255,255,0.05); color:var(--color-text-muted); padding:1px 4px; border-radius:3px;">Co</span>';
-                                            echo '<span class="badge" style="font-size:0.75rem; background:rgba(255,255,255,0.03); border:1px solid var(--border-glass); padding:3px 7px; border-radius:4px; display:inline-flex; align-items:center; gap:5px;">';
+                                            echo '<span class="badge" style="font-size:0.75rem; background:rgba(255,255,255,0.04); border:1px solid var(--border-glass); padding:3px 7px; border-radius:4px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap;">';
                                             echo '<i class="fa-solid fa-user-check" style="color:var(--color-accent); font-size:0.7rem;"></i> ' . htmlspecialchars($fullname_th) . ' ' . $role_badge;
                                             echo '</span>';
                                         }
@@ -890,14 +909,21 @@ include_once __DIR__ . '/includes/header.php';
                                     <span style="color: var(--color-text-muted); font-size: 0.75rem;">-</span>
                                 <?php endif; ?>
                             </td>
-                            <td style="padding: 12px 8px; text-align: right; font-family: var(--font-eng); font-weight: 700; font-size: 1rem; color: #10b981; vertical-align: top;">
-                                <?php echo number_format((float)$rp['rcr'], 2); ?>
+                            <td style="padding: 12px 14px; text-align: right; vertical-align: middle;">
+                                <span style="font-family: var(--font-eng); font-weight: 700; font-size: 1.1rem; color: #10b981; display: inline-block;">
+                                    <?php echo number_format((float)$rp['rcr'], 2); ?>
+                                </span>
                             </td>
-                            <td style="padding: 12px 8px; text-align: right; font-family: var(--font-eng); color: var(--color-text-muted); vertical-align: top;">
-                                <?php echo $rp['nih_percentile'] !== null ? number_format((float)$rp['nih_percentile'], 1) . '%' : '-'; ?>
+                            <td style="padding: 12px 14px; text-align: right; vertical-align: middle;">
+                                <span style="font-family: var(--font-eng); font-size: 0.88rem; color: var(--color-text-muted);">
+                                    <?php echo $rp['nih_percentile'] !== null ? number_format((float)$rp['nih_percentile'], 1) . '%' : '-'; ?>
+                                </span>
                             </td>
                         </tr>
-                        <?php endforeach; ?>
+                        <?php 
+                        $rcr_rank++;
+                        endforeach; 
+                        ?>
                     </tbody>
                 </table>
             </div>
