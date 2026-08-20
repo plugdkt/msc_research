@@ -2810,11 +2810,6 @@
                 "growth": 0
             },
             {
-                "k": "trend",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
                 "k": "bitter gourd",
                 "rel": 0.5,
                 "growth": 0
@@ -2891,11 +2886,6 @@
             },
             {
                 "k": "processing methods",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "protein",
                 "rel": 0.5,
                 "growth": 0
             },
@@ -3165,17 +3155,7 @@
                 "growth": 0
             },
             {
-                "k": "dose",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
                 "k": "Nilaparvata lugens",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "population",
                 "rel": 0.5,
                 "growth": 0
             },
@@ -5729,6 +5709,341 @@
                 "k": "violin plot",
                 "rel": 0.33,
                 "growth": 0
+            },
+            {
+                "k": "methamphetamine",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "amphetamine",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "drug addiction",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "drug withdrawal",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "substance abuse",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "substance dependence",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neuroscience",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neurotransmission",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neurotransmitter",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neuroprotective",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neuroprotection",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neurogenesis",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neurotoxicity",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neurological disorder",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neurological disease",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "brain hippocampus",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "hippocampus",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "cerebral cortex",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "cerebellum",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "striatum",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "prefrontal cortex",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neuron",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "neuronal",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "synaptic plasticity",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "synapse",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "glutamate receptor",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "nmda receptor",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "nmdar",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "ampar",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "gaba",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "gabaergic",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "dopamine",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "dopaminergic",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "serotonin",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "calmodulin",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "protein kinase",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "pharmacology",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "pharmacological",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "pharmacodynamics",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "therapeutic effect",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "therapeutics",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "clinical trial",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "biomedical",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "anti-inflammatory",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "antioxidant",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "oxidative stress",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "apoptosis",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "osteoporosis",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "pathophysiology",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "sperm quality",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "sperm abnormalities",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "spermatogenesis",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "testicular toxicity",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "teratozoospermia",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "normozoospermia",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "androgen receptor",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "cancer therapy",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "tumor growth",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "cell death",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "cytotoxicity",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "immunology",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "disease mechanism",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "biomarker",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "pathology",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "pathological",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "etiology",
+                "rel": 1,
+                "is_primary": false
+            },
+            {
+                "k": "diagnosis",
+                "rel": 1,
+                "is_primary": false
             }
         ]
     },
@@ -24172,17 +24487,7 @@
                 "growth": 0
             },
             {
-                "k": "morphology",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
                 "k": "pathogen transmission",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "PCR",
                 "rel": 0.5,
                 "growth": 0
             },
@@ -24213,16 +24518,6 @@
             },
             {
                 "k": "dengue",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "distribution",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "frequency",
                 "rel": 0.5,
                 "growth": 0
             },
@@ -24353,11 +24648,6 @@
             },
             {
                 "k": "intron",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "mRNA",
                 "rel": 0.5,
                 "growth": 0
             },
@@ -24513,11 +24803,6 @@
             },
             {
                 "k": "Gut",
-                "rel": 0.5,
-                "growth": 0
-            },
-            {
-                "k": "Immunohistochemistry",
                 "rel": 0.5,
                 "growth": 0
             },
@@ -28285,11 +28570,6 @@
             },
             {
                 "k": "comparative constitutional law",
-                "rel": 1,
-                "growth": 0
-            },
-            {
-                "k": "executive",
                 "rel": 1,
                 "growth": 0
             },
