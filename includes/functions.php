@@ -402,11 +402,19 @@ function http_get($url, array $headers = [], $timeout = 10, $user_agent = null) 
     if (!empty($headers)) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     }
-    // SSL verification stays on for every outbound call (Scopus, CrossRef, ...).
-    // If the Windows/IIS CA bundle is out of date, fix that at the php.ini level
-    // (curl.cainfo pointing at an up-to-date cacert.pem) rather than disabling
-    // verification here — that would silently accept any TLS certificate,
-    // including a MITM's, for every API this app calls.
+    // SSL verification stays on for every outbound call (Scopus, NCBI, NIH, OpenAlex, CrossRef, ...).
+    // If a local CA bundle is present, automatically configure CURLOPT_CAINFO.
+    $ca_candidates = [
+        defined('CURL_CA_BUNDLE') ? CURL_CA_BUNDLE : '',
+        __DIR__ . '/../config/cacert.pem',
+        'C:\\xampp\\php\\extras\\ssl\\cacert.pem',
+    ];
+    foreach ($ca_candidates as $ca_file) {
+        if (!empty($ca_file) && file_exists($ca_file) && is_readable($ca_file)) {
+            curl_setopt($ch, CURLOPT_CAINFO, $ca_file);
+            break;
+        }
+    }
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 
