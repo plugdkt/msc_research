@@ -13,13 +13,28 @@ require_once __DIR__ . '/admin_header.php';
 
 try {
     $total_pubs = (int)$pdo->query("SELECT COUNT(*) FROM `publications`")->fetchColumn();
+    // "abstract != 'Article'" only excludes that one literal placeholder -
+    // is_valid_abstract() in includes/functions.php (used by
+    // classify_sdgs_llm.php's action=process) also rejects 9 other
+    // placeholder document-type strings ('Review', 'Book Chapter', etc.)
+    // and anything under 40 characters. This count is display-only
+    // (a loose "how many look like they have real abstract text" estimate)
+    // - it is NOT used to compute $pubs_pending below, since it doesn't
+    // match action=list's actual WHERE clause and previously produced a
+    // misleadingly small "pending" count (confirmed live 2026-08-21: a
+    // batch interrupted by quota exhaustion left far more untouched rows
+    // than this subtraction implied, because many had a placeholder
+    // abstract this filter doesn't catch).
     $pubs_with_abstract = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE abstract IS NOT NULL AND abstract != '' AND abstract != 'Article'")->fetchColumn();
     $pubs_checked = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE llm_checked_at IS NOT NULL")->fetchColumn();
     $pubs_classified = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE llm_sdg_primary IS NOT NULL")->fetchColumn();
+    // Matches classify_sdgs_llm.php's action=list (pending mode) WHERE
+    // clause exactly, so this number always equals what a "start" click
+    // will actually process - no separate approximation to drift out of sync.
+    $pubs_pending = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE abstract IS NOT NULL AND abstract != '' AND llm_checked_at IS NULL")->fetchColumn();
 } catch (PDOException $e) {
-    $total_pubs = $pubs_with_abstract = $pubs_checked = $pubs_classified = 0;
+    $total_pubs = $pubs_with_abstract = $pubs_checked = $pubs_classified = $pubs_pending = 0;
 }
-$pubs_pending = max(0, $pubs_with_abstract - $pubs_checked);
 
 // Check UP AI Connect Status
 $ai_configured = defined('UP_AI_CONNECT_BASE_URL') && defined('UP_AI_CONNECT_API_KEY') && !empty(UP_AI_CONNECT_BASE_URL) && !empty(UP_AI_CONNECT_API_KEY);
