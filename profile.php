@@ -141,8 +141,8 @@ include_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Profile Info Card -->
-<div class="glass-panel animate-fade-in" style="padding: 40px; display: flex; gap: 30px; margin-bottom: 30px; flex-wrap: wrap; align-items: center;">
-    <div class="researcher-avatar" style="width: 140px; height: 140px; font-size: 3.5rem; border-width: 4px;">
+<div class="glass-panel animate-fade-in" style="padding: 40px; display: flex; gap: 30px; margin-bottom: 30px; flex-wrap: wrap; align-items: flex-start;">
+    <div class="researcher-avatar" style="width: 140px; height: 140px; font-size: 3.5rem; border-width: 4px; flex-shrink: 0;">
         <?php if (!empty($researcher['avatar_url'])): ?>
             <img src="<?php echo htmlspecialchars($researcher['avatar_url']); ?>" alt="avatar">
         <?php else: ?>
@@ -150,7 +150,7 @@ include_once __DIR__ . '/includes/header.php';
         <?php endif; ?>
     </div>
     
-    <div style="flex-grow: 1; min-width: 300px;">
+    <div style="flex-grow: 1; min-width: 280px; max-width: 600px;">
         <div style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">
             <?php echo htmlspecialchars(($researcher['title_th'] ?? '') . ' ' . $researcher['first_name_th'] . ' ' . $researcher['last_name_th']); ?>
         </div>
@@ -212,9 +212,9 @@ include_once __DIR__ . '/includes/header.php';
         </div>
     </div>
     
-    <!-- Metrics Boxes -->
-    <div style="display: flex; gap: 15px; min-width: 250px; flex-wrap: wrap;">
-        <div class="glass-panel" style="padding: 15px 25px; text-align: center; flex: 1; min-width: 110px;">
+    <!-- Metrics Boxes (Top Right Corner) -->
+    <div style="display: flex; gap: 12px; min-width: 280px; flex-wrap: wrap; align-self: flex-start; margin-left: auto;">
+        <div class="glass-panel" style="padding: 15px 20px; text-align: center; flex: 1; min-width: 105px;">
             <div style="font-size: 1.8rem; font-weight: 700; color: var(--color-primary); font-family: var(--font-eng); line-height: 1.2;"><?php echo count($publications); ?></div>
             <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px;">ผลงานตีพิมพ์</div>
             <div style="font-size: 0.72rem; color: var(--color-text-muted); border-top: 1px solid var(--border-glass); padding-top: 6px; display: flex; justify-content: center; gap: 6px; font-weight: 500;">
@@ -223,11 +223,11 @@ include_once __DIR__ . '/includes/header.php';
                 <span style="color: #60a5fa;">Co: <?php echo $co_author_count; ?></span>
             </div>
         </div>
-        <div class="glass-panel" style="padding: 15px 25px; text-align: center; flex: 1; min-width: 110px;">
+        <div class="glass-panel" style="padding: 15px 20px; text-align: center; flex: 1; min-width: 105px;">
             <div style="font-size: 1.8rem; font-weight: 700; color: var(--color-accent); font-family: var(--font-eng);"><?php echo $total_citations; ?></div>
             <div style="font-size: 0.75rem; color: var(--color-text-muted);">Citations รวม</div>
         </div>
-        <div class="glass-panel" style="padding: 15px 25px; text-align: center; flex: 1; min-width: 110px;">
+        <div class="glass-panel" style="padding: 15px 20px; text-align: center; flex: 1; min-width: 105px;">
             <div style="font-size: 1.8rem; font-weight: 700; color: #10b981; font-family: var(--font-eng);"><?php echo get_researcher_h_index_peak($pdo, $researcher_id); ?></div>
             <div style="font-size: 0.75rem; color: var(--color-text-muted);">h-index</div>
         </div>
