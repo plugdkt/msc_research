@@ -18,6 +18,14 @@ define('SCOPUS_API_KEY', 'CHANGE_ME');
 // limited but functional) - only needed for the "polite pool"/premium tier.
 define('OPENALEX_API_KEY', 'CHANGE_ME');
 
+// UP AI Connect (university-provided AI gateway - Phase 10, Zero-Shot LLM
+// AI Layer). OpenAI-compatible chat/completion API, multiple provider
+// models available (Claude/OpenAI/Gemini/Deepseek/Perplexity), no
+// embedding model - see ROADMAP.md Phase 10 design notes. Daily token
+// quota is per-provider, not per-key - spread large batches accordingly.
+define('UP_AI_CONNECT_BASE_URL', 'CHANGE_ME');
+define('UP_AI_CONNECT_API_KEY', 'CHANGE_ME');
+
 define('SSO_CLIENT_ID', 'msc_research');
 define('SSO_CLIENT_SECRET', 'CHANGE_ME');
 define('SSO_LOGIN_URL', 'https://www.medsci.up.ac.th/msc_acc/sso/login.php');

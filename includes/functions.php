@@ -506,6 +506,74 @@ function http_get_json($url, array $headers = [], $timeout = 10, $user_agent = n
     return $data;
 }
 
+/**
+ * POST a JSON body and decode a JSON response - same exception/SSL/timeout
+ * contract as http_get() (ApiTimeoutException/ApiRateLimitException/
+ * ApiHttpException), for APIs that require POST (e.g. UP AI Connect's
+ * OpenAI-compatible /chat/completions - Phase 10).
+ */
+function http_post_json($url, array $body, array $headers = [], $timeout = 30, $user_agent = null) {
+    $default_headers = array_merge(['Accept: application/json', 'Content-Type: application/json'], $headers);
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min(5, $timeout));
+    curl_setopt($ch, CURLOPT_USERAGENT, $user_agent ?: 'MSC-Research-System/1.0 (+https://www.medsci.up.ac.th; mailto:msc_research@up.ac.th)');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $default_headers);
+    $ca_candidates = [
+        defined('CURL_CA_BUNDLE') ? CURL_CA_BUNDLE : '',
+        __DIR__ . '/../config/cacert.pem',
+        'C:\\xampp\\php\\extras\\ssl\\cacert.pem',
+    ];
+    foreach ($ca_candidates as $ca_file) {
+        if (!empty($ca_file) && file_exists($ca_file) && is_readable($ca_file)) {
+            curl_setopt($ch, CURLOPT_CAINFO, $ca_file);
+            break;
+        }
+    }
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+    $raw = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $error = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+
+    if ($errno !== 0) {
+        throw new ApiTimeoutException("HTTP POST failed ({$url}): curl error [{$errno}] {$error}");
+    }
+
+    $header_text = $raw !== false ? substr($raw, 0, $header_size) : '';
+    $resp_body = $raw !== false ? substr($raw, $header_size) : '';
+
+    if ($http_code === 429) {
+        $retry_after = null;
+        if (preg_match('/^Retry-After:\s*(\d+)/mi', $header_text, $m)) {
+            $retry_after = (int)$m[1];
+        } elseif (preg_match('/^X-RateLimit-Reset:\s*(\d+)/mi', $header_text, $m)) {
+            $retry_after = max(0, (int)$m[1] - time());
+        }
+        throw new ApiRateLimitException("HTTP POST failed ({$url}): rate limited (429)", $retry_after);
+    }
+
+    if ($http_code < 200 || $http_code >= 300) {
+        throw new ApiHttpException("HTTP POST failed ({$url}): HTTP status {$http_code} - " . substr($resp_body, 0, 300), $http_code);
+    }
+
+    $data = json_decode($resp_body, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        throw new RuntimeException("HTTP POST failed ({$url}): invalid JSON response - " . json_last_error_msg());
+    }
+    return $data;
+}
+
 
 /**
  * Search CrossRef API by publication title to find the direct DOI and publisher URL.
@@ -1462,6 +1530,142 @@ function fetch_openalex_work_topics_with_retry($doi) {
 
     throw new RuntimeException(
         "OpenAlex topic fetch failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+    );
+}
+
+/**
+ * Phase 10 (Zero-Shot LLM AI Layer): the 17 UN SDGs as a compact reference
+ * list for the classification prompt - short enough to keep the per-call
+ * token cost down (verified live: ~270 tokens/call total including this
+ * list), not the full official target descriptions.
+ */
+const SDG_REFERENCE_LIST = [
+    1 => 'No Poverty', 2 => 'Zero Hunger', 3 => 'Good Health and Well-being',
+    4 => 'Quality Education', 5 => 'Gender Equality', 6 => 'Clean Water and Sanitation',
+    7 => 'Affordable and Clean Energy', 8 => 'Decent Work and Economic Growth',
+    9 => 'Industry, Innovation and Infrastructure', 10 => 'Reduced Inequality',
+    11 => 'Sustainable Cities and Communities', 12 => 'Responsible Consumption and Production',
+    13 => 'Climate Action', 14 => 'Life Below Water', 15 => 'Life on Land',
+    16 => 'Peace, Justice and Strong Institutions', 17 => 'Partnerships for the Goals',
+];
+
+/**
+ * Phase 10 (SEM-01/02): zero-shot-classify a publication's SDG alignment
+ * via an LLM chat-completion call to UP AI Connect (university-provided AI
+ * gateway - config/secrets.local.php UP_AI_CONNECT_BASE_URL/_API_KEY), in
+ * place of embedding+cosine-similarity: the platform's Models list has no
+ * embedding model at all (confirmed 2026-08-21), only chat/completion
+ * models, so this reasons over the text directly instead. The same call
+ * also returns a short semantic tag list, reused by the expert finder
+ * (SEM-05) at no extra API cost.
+ *
+ * Runs alongside the existing Phase 6 keyword-dictionary classifier
+ * (score_publication_sdgs()) - this never writes to sdg_primary/secondary/
+ * tertiary, only to the separate llm_* columns added by
+ * database/add_llm_classification_columns.php.
+ *
+ * @return array{sdg_primary:?int,confidence_primary:?int,sdg_secondary:?int,confidence_secondary:?int,rationale:?string,semantic_tags:array,model:string}
+ * @throws ApiTimeoutException|ApiRateLimitException|ApiHttpException|RuntimeException
+ */
+function fetch_llm_sdg_classification($title, $abstract, $model = 'gpt-5.4-mini') {
+    if (!defined('UP_AI_CONNECT_BASE_URL') || !defined('UP_AI_CONNECT_API_KEY')
+        || empty(UP_AI_CONNECT_BASE_URL) || empty(UP_AI_CONNECT_API_KEY)) {
+        throw new RuntimeException('ไม่พบการตั้งค่า UP AI Connect (UP_AI_CONNECT_BASE_URL/UP_AI_CONNECT_API_KEY)');
+    }
+
+    $sdg_list_text = implode("\n", array_map(
+        function ($num, $name) { return "{$num}. {$name}"; },
+        array_keys(SDG_REFERENCE_LIST),
+        SDG_REFERENCE_LIST
+    ));
+
+    $prompt = "Classify this publication abstract against the UN Sustainable Development Goals (SDG 1-17):\n"
+        . $sdg_list_text . "\n\n"
+        . "Title: " . $title . "\n"
+        . "Abstract: " . mb_substr((string)$abstract, 0, 2000) . "\n\n"
+        . "Return JSON with fields: sdg_primary (number 1-17 or null), confidence_primary (0-100), "
+        . "sdg_secondary (number 1-17 or null), confidence_secondary (0-100 or null), "
+        . "rationale (one short Thai sentence), semantic_tags (array of 3-5 short keyword phrases).";
+
+    $url = rtrim(UP_AI_CONNECT_BASE_URL, '/') . '/chat/completions';
+    $headers = ['Authorization: Bearer ' . UP_AI_CONNECT_API_KEY];
+    $body = [
+        'model' => $model,
+        'messages' => [
+            ['role' => 'system', 'content' => 'You are a research classification assistant. Respond ONLY with valid JSON, no markdown fences.'],
+            ['role' => 'user', 'content' => $prompt],
+        ],
+        'temperature' => 0.1,
+    ];
+
+    $data = http_post_json($url, $body, $headers, 30);
+
+    $content = $data['choices'][0]['message']['content'] ?? null;
+    if ($content === null) {
+        throw new RuntimeException('UP AI Connect: unexpected response shape (no choices[0].message.content)');
+    }
+
+    // Defensive: strip markdown fences if the model adds them despite the
+    // system prompt instruction (observed behavior varies by provider/model).
+    $content = trim($content);
+    $content = preg_replace('/^```(?:json)?\s*/i', '', $content);
+    $content = preg_replace('/```\s*$/', '', $content);
+
+    $parsed = json_decode($content, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($parsed)) {
+        throw new RuntimeException('UP AI Connect: model did not return valid JSON - ' . substr($content, 0, 200));
+    }
+
+    $clamp_sdg = function ($v) {
+        $n = (int)$v;
+        return ($n >= 1 && $n <= 17) ? $n : null;
+    };
+    $clamp_confidence = function ($v) {
+        if ($v === null || $v === '') return null;
+        return max(0, min(100, (int)$v));
+    };
+
+    return [
+        'sdg_primary' => $clamp_sdg($parsed['sdg_primary'] ?? null),
+        'confidence_primary' => $clamp_confidence($parsed['confidence_primary'] ?? null),
+        'sdg_secondary' => $clamp_sdg($parsed['sdg_secondary'] ?? null),
+        'confidence_secondary' => $clamp_confidence($parsed['confidence_secondary'] ?? null),
+        'rationale' => isset($parsed['rationale']) ? mb_substr((string)$parsed['rationale'], 0, 500) : null,
+        'semantic_tags' => is_array($parsed['semantic_tags'] ?? null) ? array_slice(array_map('strval', $parsed['semantic_tags']), 0, 5) : [],
+        'model' => $data['model'] ?? $model,
+    ];
+}
+
+/**
+ * fetch_llm_sdg_classification() wrapped with the same retry contract used
+ * throughout this project (timeout: 3x with 5s/15s/45s backoff; 429: wait
+ * per header or 60s fallback). A 4xx that isn't 429 (e.g. bad request, auth
+ * failure) is not retryable and is rethrown immediately.
+ *
+ * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ */
+function fetch_llm_sdg_classification_with_retry($title, $abstract, $model = 'gpt-5.4-mini') {
+    $backoff_schedule = [5, 15, 45];
+    $last_exception = null;
+
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        try {
+            return fetch_llm_sdg_classification($title, $abstract, $model);
+        } catch (ApiRateLimitException $e) {
+            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+            error_log("[upai][sdg] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        } catch (ApiTimeoutException $e) {
+            $wait = $backoff_schedule[$attempt] ?? 45;
+            error_log("[upai][sdg] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+            sleep($wait);
+            $last_exception = $e;
+        }
+    }
+
+    throw new RuntimeException(
+        "UP AI Connect SDG classification failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
     );
 }
 
