@@ -102,7 +102,8 @@ function fmt_pct($v) {
 // being wrong. Cohen's Kappa corrects raw agreement for exactly this kind
 // of chance/skew inflation. Reuses $normalize_keyword defined above.
 $agreement_rows = $pdo->query("
-    SELECT sdg_primary AS keyword_sdg, llm_sdg_primary AS llm_sdg
+    SELECT id, title, sdg_primary AS keyword_sdg, sdg_rationale AS keyword_rationale,
+           llm_sdg_primary AS llm_sdg, llm_confidence_primary, llm_rationale
     FROM `publications`
     WHERE sdg_primary IS NOT NULL AND sdg_primary != '' AND llm_sdg_primary IS NOT NULL
 ")->fetchAll();
@@ -114,6 +115,7 @@ if (!empty($agreement_rows)) {
     $keyword_dist = [];
     $llm_dist = [];
     $confusion = []; // [keyword_sdg][llm_sdg] => count, disagreements only
+    $disagreement_examples = []; // actual publications, not just counts - for real side-by-side inspection
     foreach ($agreement_rows as $r) {
         $k = $normalize_keyword($r['keyword_sdg']);
         $l = (int)$r['llm_sdg'];
@@ -124,6 +126,15 @@ if (!empty($agreement_rows)) {
             $exact_match++;
         } else {
             $confusion[$k][$l] = ($confusion[$k][$l] ?? 0) + 1;
+            $disagreement_examples[] = [
+                'id' => (int)$r['id'],
+                'title' => $r['title'],
+                'keyword_sdg' => $k,
+                'keyword_rationale' => $r['keyword_rationale'],
+                'llm_sdg' => $l,
+                'llm_confidence' => (int)$r['llm_confidence_primary'],
+                'llm_rationale' => $r['llm_rationale'],
+            ];
         }
     }
     $po = $n > 0 ? $exact_match / $n : 0;
@@ -144,12 +155,20 @@ if (!empty($agreement_rows)) {
     }
     usort($disagreement_pairs, function ($a, $b) { return $b['count'] <=> $a['count']; });
 
+    // Real example publications, most-confident AI disagreements first -
+    // these are the cases most worth a human actually reading, since a
+    // high-confidence AI disagreement is either a clear AI win or a clear
+    // AI miss, not an ambiguous borderline call either way.
+    usort($disagreement_examples, function ($a, $b) { return $b['llm_confidence'] <=> $a['llm_confidence']; });
+
     $agreement = [
         'n' => $n,
         'exact_match' => $exact_match,
         'po' => $po,
         'kappa' => $kappa,
         'top_disagreements' => array_slice($disagreement_pairs, 0, 5),
+        'disagreement_examples' => array_slice($disagreement_examples, 0, 25),
+        'disagreement_total' => count($disagreement_examples),
     ];
 }
 ?>
@@ -198,6 +217,39 @@ if (!empty($agreement_rows)) {
         </div>
     <?php endif; ?>
 </div>
+
+<?php if (!empty($agreement['disagreement_examples'])): ?>
+<div class="glass-panel animate-fade-in" style="padding: 25px; margin-bottom: 25px;">
+    <h3 style="margin-bottom: 4px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-magnifying-glass" style="color: #60a5fa;"></i>
+        <span>ตัวอย่างผลงานจริงที่ 2 วิธีให้คำตอบไม่ตรงกัน</span>
+    </h3>
+    <p style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 15px;">
+        แสดง <?php echo count($agreement['disagreement_examples']); ?> จาก <?php echo number_format($agreement['disagreement_total']); ?> รายการที่ไม่ตรงกันทั้งหมด เรียงจากที่ AI มั่นใจมากที่สุดก่อน (กรณีมั่นใจสูงแต่ไม่ตรงกับพจนานุกรม คือกรณีที่น่าดูที่สุดว่าใครถูก) — อ่านชื่อเรื่องแล้วตัดสินเองว่า SDG ไหนตรงกับเนื้อหาจริงมากกว่า
+    </p>
+    <div style="display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto;">
+        <?php foreach ($agreement['disagreement_examples'] as $ex): ?>
+            <div style="padding: 14px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 8px;">
+                <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 8px;">
+                    <?php echo htmlspecialchars($ex['title']); ?>
+                    <span style="font-weight: 400; color: var(--color-text-muted); font-size: 0.75rem;">(#<?php echo $ex['id']; ?>)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.8rem;">
+                    <div style="border-left: 3px solid #10b981; padding-left: 10px;">
+                        <div style="color: #10b981; font-weight: 600; margin-bottom: 3px;">พจนานุกรม: SDG <?php echo $ex['keyword_sdg']; ?></div>
+                        <div style="color: var(--color-text-muted); line-height: 1.5;"><?php echo htmlspecialchars($ex['keyword_rationale'] ?: '(ไม่มีเหตุผลบันทึกไว้)'); ?></div>
+                    </div>
+                    <div style="border-left: 3px solid #8b5cf6; padding-left: 10px;">
+                        <div style="color: #8b5cf6; font-weight: 600; margin-bottom: 3px;">AI: SDG <?php echo $ex['llm_sdg']; ?> (<?php echo $ex['llm_confidence']; ?>%)</div>
+                        <div style="color: var(--color-text-muted); line-height: 1.5;"><?php echo htmlspecialchars($ex['llm_rationale'] ?: '(ไม่มีเหตุผลบันทึกไว้)'); ?></div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php else: ?>
 <div class="glass-panel animate-fade-in" style="padding: 20px 25px; margin-bottom: 25px; color: var(--color-text-muted); font-size: 0.85rem; text-align: center;">
     ยังไม่มีผลงานที่ผ่านทั้งพจนานุกรมคำสำคัญและ AI Zero-Shot พร้อมกัน จึงยังเปรียบเทียบความสอดคล้องไม่ได้
