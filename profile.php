@@ -55,11 +55,12 @@ foreach ($publications as $pub) {
         $quartile_counts[$q]++;
     }
 
-    // SDGs
-    foreach (['sdg_primary', 'sdg_secondary', 'sdg_tertiary'] as $slot) {
-        $s = $pub[$slot] ?? '';
-        if (!empty($s) && preg_match('/SDG\s*(\d+)/i', $s, $m)) {
-            $num = (int)$m[1];
+    // SDGs - effective classification (Phase 10.5: LLM once available,
+    // keyword-dictionary fallback until then), not the raw keyword columns.
+    $eff = get_effective_sdgs($pub);
+    foreach (['primary', 'secondary', 'tertiary'] as $slot) {
+        if ($eff[$slot]) {
+            $num = (int)preg_replace('/[^0-9]/', '', $eff[$slot]['code']);
             $researcher_sdgs[$num] = ($researcher_sdgs[$num] ?? 0) + 1;
         }
     }
@@ -558,15 +559,7 @@ include_once __DIR__ . '/includes/header.php';
                                 <span class="badge" style="<?php echo $role_class; ?> font-weight: 600;">
                                     <?php echo htmlspecialchars($role); ?>
                                 </span>
-                                <?php if (!empty($pub['sdg_primary'])): ?>
-                                    <?php echo render_sdg_badge($pub['sdg_primary'], true); ?>
-                                <?php endif; ?>
-                                <?php if (!empty($pub['sdg_secondary'])): ?>
-                                    <?php echo render_sdg_badge($pub['sdg_secondary'], false); ?>
-                                <?php endif; ?>
-                                <?php if (!empty($pub['sdg_tertiary'])): ?>
-                                    <?php echo render_sdg_badge($pub['sdg_tertiary'], false); ?>
-                                <?php endif; ?>
+                                <?php echo render_effective_sdg_badges($pub); ?>
                                 <?php echo render_rcr_badge($pub['rcr'] ?? null, $pub['nih_percentile'] ?? null); ?>
                             </div>
                             

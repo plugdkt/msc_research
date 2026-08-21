@@ -2126,6 +2126,89 @@ function get_all_sdgs() {
 }
 
 /**
+ * Phase 10.5: resolves the SINGLE authoritative SDG classification for a
+ * publication across the whole site, after faculty leadership reviewed
+ * real disagreement examples (admin/sdg_validation.php) and confirmed the
+ * keyword dictionary sometimes matches generic academic terms unrelated to
+ * the actual research (verified live: a peritoneal-dialysis nutrition
+ * paper was tagged SDG 2 "Zero Hunger" purely because it matched the
+ * words "efficacy"/"key" as full-phrase hits, while the LLM correctly
+ * identified SDG 3 "health"). Leadership decided the LLM classification
+ * should be authoritative wherever it exists.
+ *
+ * Once a publication has been through Zero-Shot LLM Classify
+ * (llm_sdg_primary is set), its result is used - the LLM only ever
+ * produces a primary + optional secondary, so there is no "tertiary" slot
+ * in that case. Until a publication has been LLM-classified, the Phase 6
+ * keyword-dictionary result (primary/secondary/tertiary) remains the
+ * fallback, so every publication still shows something rather than
+ * nothing while the LLM batch continues to catch up on any remaining
+ * publications.
+ *
+ * Deliberately does NOT overwrite sdg_primary/secondary/tertiary or the
+ * llm_* columns - both stay independently readable so admin/sdg_validation.php's
+ * agreement/Precision-Recall comparison keeps working against two real,
+ * separate classifications, not one merged one.
+ *
+ * @param array $pub a publication row - must include sdg_primary,
+ *   sdg_secondary, sdg_tertiary, llm_sdg_primary, llm_confidence_primary,
+ *   llm_sdg_secondary, llm_confidence_secondary (a plain `SELECT p.*` or
+ *   an explicit SELECT naming all of these covers it)
+ * @return array{source:string,primary:?array,secondary:?array,tertiary:?array}
+ *   each non-null slot is ['code'=>'SDG N','confidence'=>int|null]
+ */
+function get_effective_sdgs($pub) {
+    if (!empty($pub['llm_sdg_primary'])) {
+        $mk = function ($sdg_num, $confidence) {
+            return $sdg_num ? ['code' => 'SDG ' . (int)$sdg_num, 'confidence' => $confidence !== null ? (int)$confidence : null] : null;
+        };
+        return [
+            'source' => 'llm',
+            'primary' => $mk($pub['llm_sdg_primary'], $pub['llm_confidence_primary'] ?? null),
+            'secondary' => !empty($pub['llm_sdg_secondary']) ? $mk($pub['llm_sdg_secondary'], $pub['llm_confidence_secondary'] ?? null) : null,
+            'tertiary' => null,
+        ];
+    }
+    $mk_keyword = function ($code) {
+        return !empty($code) ? ['code' => $code, 'confidence' => null] : null;
+    };
+    return [
+        'source' => 'keyword',
+        'primary' => $mk_keyword($pub['sdg_primary'] ?? null),
+        'secondary' => $mk_keyword($pub['sdg_secondary'] ?? null),
+        'tertiary' => $mk_keyword($pub['sdg_tertiary'] ?? null),
+    ];
+}
+
+/**
+ * Renders the effective primary/secondary/tertiary SDG badges for a
+ * publication in one call - dispatches to render_llm_sdg_badge() when the
+ * effective source is the LLM (so confidence % is visible) or
+ * render_sdg_badge() when it's the keyword-dictionary fallback, so callers
+ * never need to duplicate the get_effective_sdgs() branching themselves.
+ */
+function render_effective_sdg_badges($pub, $font_size = '0.72rem') {
+    $eff = get_effective_sdgs($pub);
+    $html = '';
+    $slots = [['primary', true], ['secondary', false], ['tertiary', false]];
+    foreach ($slots as [$slot, $is_primary]) {
+        $s = $eff[$slot];
+        if (!$s) continue;
+        if ($eff['source'] === 'llm') {
+            $num = (int)preg_replace('/[^0-9]/', '', $s['code']);
+            // Only the primary slot carries a rationale tooltip - LLM
+            // secondary picks don't get their own separate rationale text
+            // (see fetch_llm_sdg_classification(), one rationale per call).
+            $rationale = $is_primary ? ($pub['llm_rationale'] ?? null) : null;
+            $html .= render_llm_sdg_badge($num, $s['confidence'], $is_primary, $font_size, $rationale);
+        } else {
+            $html .= render_sdg_badge($s['code'], $is_primary, $font_size);
+        }
+    }
+    return $html;
+}
+
+/**
  * Render a beautiful SDG badge (Primary: solid with white inner box; Secondary: outlined with colored inner box)
  */
 function render_sdg_badge($sdg_code, $is_primary = true, $font_size = '0.72rem') {

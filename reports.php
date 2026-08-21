@@ -482,16 +482,15 @@ for ($i = 1; $i <= 17; $i++) {
 $sdg_groups['Unclassified'] = [];
 
 foreach ($filtered_publications as $pub) {
+    // Phase 10.5: bucket by the effective classification (LLM once
+    // available, keyword-dictionary fallback until then), not the raw
+    // keyword columns directly - see get_effective_sdgs() in
+    // includes/functions.php for why.
+    $eff = get_effective_sdgs($pub);
     $sdgs = [];
-    if (!empty($pub['sdg_primary'])) {
-        $sdgs[] = trim($pub['sdg_primary']);
-    }
-    if (!empty($pub['sdg_secondary'])) {
-        $sdgs[] = trim($pub['sdg_secondary']);
-    }
-    if (!empty($pub['sdg_tertiary'])) {
-        $sdgs[] = trim($pub['sdg_tertiary']);
-    }
+    if ($eff['primary']) $sdgs[] = $eff['primary']['code'];
+    if ($eff['secondary']) $sdgs[] = $eff['secondary']['code'];
+    if ($eff['tertiary']) $sdgs[] = $eff['tertiary']['code'];
 
     $sdgs = array_unique($sdgs);
     $matched_any = false;
@@ -1857,37 +1856,21 @@ include_once __DIR__ . '/includes/header.php';
                                         </span>
                                     <?php endif; ?>
 
-                                    <?php if (!empty($pub['sdg_primary'])): ?>
-                                        <?php echo render_sdg_badge($pub['sdg_primary'], true, '0.68rem'); ?>
-                                    <?php endif; ?>
-                                    <?php if (!empty($pub['sdg_secondary'])): ?>
-                                        <?php echo render_sdg_badge($pub['sdg_secondary'], false, '0.68rem'); ?>
-                                    <?php endif; ?>
-                                    <?php if (!empty($pub['sdg_tertiary'])): ?>
-                                        <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.68rem'); ?>
-                                    <?php endif; ?>
-
-                                    <?php if (!empty($pub['llm_sdg_primary'])): ?>
-                                        <?php echo render_llm_sdg_badge($pub['llm_sdg_primary'], $pub['llm_confidence_primary'], true, '0.68rem'); ?>
-                                    <?php endif; ?>
-                                    <?php if (!empty($pub['llm_sdg_secondary'])): ?>
-                                        <?php echo render_llm_sdg_badge($pub['llm_sdg_secondary'], $pub['llm_confidence_secondary'], false, '0.68rem'); ?>
-                                    <?php endif; ?>
+                                    <?php echo render_effective_sdg_badges($pub, '0.68rem'); ?>
                                 </div>
 
-                                <!-- SDG Rationale (keyword dictionary classifier) -->
-                                <?php if (!empty($pub['sdg_rationale'])): ?>
-                                    <div style="margin-top: 8px; font-size: 0.78rem; color: #10b981; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.2); padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
-                                        <i class="fa-solid fa-circle-info"></i>
-                                        <span><strong>เกณฑ์ประเมิน (พจนานุกรมคำสำคัญ):</strong> <?php echo htmlspecialchars($pub['sdg_rationale']); ?></span>
-                                    </div>
-                                <?php endif; ?>
-
-                                <!-- LLM Rationale (Phase 10 zero-shot classifier, shown alongside - never replaces the above) -->
-                                <?php if (!empty($pub['llm_rationale'])): ?>
+                                <?php $eff_rationale = get_effective_sdgs($pub); ?>
+                                <?php if ($eff_rationale['source'] === 'llm' && !empty($pub['llm_rationale'])): ?>
+                                    <!-- LLM rationale (Phase 10.5: authoritative once a publication is LLM-classified) -->
                                     <div style="margin-top: 8px; font-size: 0.78rem; color: #8b5cf6; background: rgba(139, 92, 246, 0.05); border: 1px dashed rgba(139, 92, 246, 0.25); padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
                                         <i class="fa-solid fa-robot"></i>
                                         <span><strong>วิเคราะห์โดย AI (<?php echo htmlspecialchars($pub['llm_model'] ?? 'LLM'); ?>):</strong> <?php echo htmlspecialchars($pub['llm_rationale']); ?></span>
+                                    </div>
+                                <?php elseif ($eff_rationale['source'] === 'keyword' && !empty($pub['sdg_rationale'])): ?>
+                                    <!-- Keyword-dictionary rationale (fallback: this publication hasn't been through LLM Classify yet) -->
+                                    <div style="margin-top: 8px; font-size: 0.78rem; color: #10b981; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.2); padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span><strong>เกณฑ์ประเมิน (พจนานุกรมคำสำคัญ - รอ AI วิเคราะห์):</strong> <?php echo htmlspecialchars($pub['sdg_rationale']); ?></span>
                                     </div>
                                 <?php endif; ?>
 

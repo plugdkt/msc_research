@@ -480,17 +480,10 @@ try {
                                         <i class="fa-solid fa-envelope-circle-check"></i> ผู้ประสานงาน (Corresponding): <strong><?php echo htmlspecialchars($pub['corresponding_author_name']); ?></strong>
                                     </div>
                                 <?php endif; ?>
-                                <?php if (!empty($pub['sdg_primary']) || !empty($pub['sdg_secondary']) || !empty($pub['sdg_tertiary'])): ?>
+                                <?php $eff_admin = get_effective_sdgs($pub); ?>
+                                <?php if ($eff_admin['primary'] || $eff_admin['secondary'] || $eff_admin['tertiary']): ?>
                                     <div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
-                                        <?php if (!empty($pub['sdg_primary'])): ?>
-                                            <?php echo render_sdg_badge($pub['sdg_primary'], true, '0.72rem'); ?>
-                                        <?php endif; ?>
-                                        <?php if (!empty($pub['sdg_secondary'])): ?>
-                                            <?php echo render_sdg_badge($pub['sdg_secondary'], false, '0.72rem'); ?>
-                                        <?php endif; ?>
-                                        <?php if (!empty($pub['sdg_tertiary'])): ?>
-                                            <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.72rem'); ?>
-                                        <?php endif; ?>
+                                        <?php echo render_effective_sdg_badges($pub, '0.72rem'); ?>
                                     </div>
                                 <?php endif; ?>
                                 <?php if (!empty($pub['url'])): ?>
