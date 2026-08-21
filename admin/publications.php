@@ -160,8 +160,12 @@ try {
     $params = [];
     
     if (!empty($search_query)) {
-        $where_clauses[] = "(p.title LIKE :search OR p.authors LIKE :search OR p.journal_name LIKE :search OR p.doi LIKE :search)";
-        $params[':search'] = "%{$search_query}%";
+        $where_clauses[] = "(p.title LIKE :search1 OR p.authors LIKE :search2 OR p.journal_name LIKE :search3 OR p.doi LIKE :search4)";
+        $search_like = "%{$search_query}%";
+        $params[':search1'] = $search_like;
+        $params[':search2'] = $search_like;
+        $params[':search3'] = $search_like;
+        $params[':search4'] = $search_like;
     }
     
     if ($filter_intl === '1') {
