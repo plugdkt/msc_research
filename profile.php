@@ -141,95 +141,98 @@ include_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Profile Info Card -->
-<div class="glass-panel animate-fade-in" style="padding: 40px; display: flex; gap: 30px; margin-bottom: 30px; flex-wrap: wrap; align-items: flex-start;">
-    <div class="researcher-avatar" style="width: 140px; height: 140px; font-size: 3.5rem; border-width: 4px; flex-shrink: 0;">
-        <?php if (!empty($researcher['avatar_url'])): ?>
-            <img src="<?php echo htmlspecialchars($researcher['avatar_url']); ?>" alt="avatar">
-        <?php else: ?>
-            <i class="fa-solid fa-user-tie"></i>
-        <?php endif; ?>
-    </div>
-    
-    <div style="flex-grow: 1; min-width: 280px; max-width: 600px;">
-        <div style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">
-            <?php echo htmlspecialchars(($researcher['title_th'] ?? '') . ' ' . $researcher['first_name_th'] . ' ' . $researcher['last_name_th']); ?>
-        </div>
-        <div style="font-size: 1.1rem; color: var(--color-text-muted); margin-bottom: 12px; font-family: var(--font-eng);">
-            <?php echo htmlspecialchars(($researcher['title_en'] ?? '') . ' ' . $researcher['first_name_en'] . ' ' . $researcher['last_name_en']); ?>
+<div class="glass-panel animate-fade-in" style="padding: 35px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; flex-wrap: wrap;">
+    <!-- Left Section: Avatar + Details -->
+    <div style="display: flex; gap: 25px; align-items: flex-start; flex: 1; min-width: 320px;">
+        <div class="researcher-avatar" style="width: 130px; height: 130px; font-size: 3.5rem; border-width: 4px; flex-shrink: 0;">
+            <?php if (!empty($researcher['avatar_url'])): ?>
+                <img src="<?php echo htmlspecialchars($researcher['avatar_url']); ?>" alt="avatar">
+            <?php else: ?>
+                <i class="fa-solid fa-user-tie"></i>
+            <?php endif; ?>
         </div>
         
-        <!-- Identity meta: compact single-row facts, dot-separated -->
-        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 0.9rem; color: var(--color-text-muted);">
-            <span style="display: inline-flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-building-columns" style="color: var(--color-primary);"></i>
-                <span style="color: var(--color-text-main); font-weight: 600;"><?php echo htmlspecialchars($researcher['department']); ?></span>
-            </span>
-            <span style="opacity: 0.4;">•</span>
-            <span style="display: inline-flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-user-tag" style="color: var(--color-accent);"></i>
-                <?php echo htmlspecialchars($researcher['researcher_type'] ?? 'สายวิชาการ'); ?>
-            </span>
-            <?php if (!empty($researcher['email'])): ?>
+        <div style="flex: 1;">
+            <div style="font-size: 1.8rem; font-weight: 700; margin-bottom: 4px;">
+                <?php echo htmlspecialchars(($researcher['title_th'] ?? '') . ' ' . $researcher['first_name_th'] . ' ' . $researcher['last_name_th']); ?>
+            </div>
+            <div style="font-size: 1.05rem; color: var(--color-text-muted); margin-bottom: 12px; font-family: var(--font-eng);">
+                <?php echo htmlspecialchars(($researcher['title_en'] ?? '') . ' ' . $researcher['first_name_en'] . ' ' . $researcher['last_name_en']); ?>
+            </div>
+            
+            <!-- Identity meta: compact single-row facts, dot-separated -->
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 0.9rem; color: var(--color-text-muted);">
+                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-building-columns" style="color: var(--color-primary);"></i>
+                    <span style="color: var(--color-text-main); font-weight: 600;"><?php echo htmlspecialchars($researcher['department']); ?></span>
+                </span>
                 <span style="opacity: 0.4;">•</span>
                 <span style="display: inline-flex; align-items: center; gap: 6px;">
-                    <i class="fa-solid fa-envelope" style="color: var(--color-secondary);"></i>
-                    <a href="mailto:<?php echo htmlspecialchars($researcher['email']); ?>" style="color: inherit; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'"><?php echo htmlspecialchars($researcher['email']); ?></a>
+                    <i class="fa-solid fa-user-tag" style="color: var(--color-accent);"></i>
+                    <?php echo htmlspecialchars($researcher['researcher_type'] ?? 'สายวิชาการ'); ?>
                 </span>
-            <?php endif; ?>
-        </div>
+                <?php if (!empty($researcher['email'])): ?>
+                    <span style="opacity: 0.4;">•</span>
+                    <span style="display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-envelope" style="color: var(--color-secondary);"></i>
+                        <a href="mailto:<?php echo htmlspecialchars($researcher['email']); ?>" style="color: inherit; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'"><?php echo htmlspecialchars($researcher['email']); ?></a>
+                    </span>
+                <?php endif; ?>
+            </div>
 
-        <!-- Dominant OpenAlex field(s): computed insight, styled distinctly from the identity facts above -->
-        <?php if (!empty($dominant_fields)): ?>
-        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
-            <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;">สาขาการวิจัย</span>
-            <?php foreach ($dominant_fields as $df): ?>
-                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: #818cf8; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 4px 12px; border-radius: 20px;">
-                    <i class="fa-solid fa-flask" style="font-size: 0.72rem;"></i>
-                    <?php echo htmlspecialchars($df['field']); ?>
-                    <span style="color: var(--color-text-muted); font-weight: 400;">· <?php echo (int)$df['pub_count']; ?> ผลงาน</span>
-                </span>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
+            <!-- Dominant OpenAlex field(s): computed insight, styled distinctly from the identity facts above -->
+            <?php if (!empty($dominant_fields)): ?>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 16px;">
+                <span style="font-size: 0.72rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-right: 2px;">สาขาการวิจัย:</span>
+                <?php foreach ($dominant_fields as $df): ?>
+                    <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 600; color: #818cf8; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 3px 10px; border-radius: 16px;">
+                        <i class="fa-solid fa-flask" style="font-size: 0.7rem;"></i>
+                        <?php echo htmlspecialchars($df['field']); ?>
+                        <span style="color: var(--color-text-muted); font-weight: 400;">· <?php echo (int)$df['pub_count']; ?></span>
+                    </span>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
 
-        <!-- External Profiles Links -->
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <?php if (!empty($researcher['orcid_id'])): ?>
-                <a href="https://orcid.org/<?php echo htmlspecialchars($researcher['orcid_id']); ?>" target="_blank" class="badge badge-orcid" style="padding: 6px 12px; text-decoration: none; font-weight: 500;">
-                    <i class="fa-brands fa-orcid"></i> ORCID Profile <i class="fa-solid fa-external-link" style="font-size: 0.65rem;"></i>
-                </a>
-            <?php endif; ?>
-            <?php if (!empty($researcher['scopus_author_id'])): ?>
-                <a href="https://www.scopus.com/authid/detail.uri?authorId=<?php echo htmlspecialchars($researcher['scopus_author_id']); ?>" target="_blank" class="badge badge-scopus" style="padding: 6px 12px; text-decoration: none; font-weight: 500;">
-                    <i class="fa-solid fa-graduation-cap"></i> Scopus Author Profile <i class="fa-solid fa-external-link" style="font-size: 0.65rem;"></i>
-                </a>
-            <?php endif; ?>
-            <?php if (!empty($researcher['google_scholar_id'])): ?>
-                <a href="https://scholar.google.com/citations?user=<?php echo htmlspecialchars($researcher['google_scholar_id']); ?>" target="_blank" class="badge badge-scholar" style="padding: 6px 12px; text-decoration: none; font-weight: 500;">
-                    <i class="fa-solid fa-graduation-cap"></i> Google Scholar Profile <i class="fa-solid fa-external-link" style="font-size: 0.65rem;"></i>
-                </a>
-            <?php endif; ?>
+            <!-- External Profiles Links -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <?php if (!empty($researcher['orcid_id'])): ?>
+                    <a href="https://orcid.org/<?php echo htmlspecialchars($researcher['orcid_id']); ?>" target="_blank" class="badge badge-orcid" style="padding: 5px 10px; text-decoration: none; font-weight: 500; font-size: 0.8rem;">
+                        <i class="fa-brands fa-orcid"></i> ORCID <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i>
+                    </a>
+                <?php endif; ?>
+                <?php if (!empty($researcher['scopus_author_id'])): ?>
+                    <a href="https://www.scopus.com/authid/detail.uri?authorId=<?php echo htmlspecialchars($researcher['scopus_author_id']); ?>" target="_blank" class="badge badge-scopus" style="padding: 5px 10px; text-decoration: none; font-weight: 500; font-size: 0.8rem;">
+                        <i class="fa-solid fa-graduation-cap"></i> Scopus <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i>
+                    </a>
+                <?php endif; ?>
+                <?php if (!empty($researcher['google_scholar_id'])): ?>
+                    <a href="https://scholar.google.com/citations?user=<?php echo htmlspecialchars($researcher['google_scholar_id']); ?>" target="_blank" class="badge badge-scholar" style="padding: 5px 10px; text-decoration: none; font-weight: 500; font-size: 0.8rem;">
+                        <i class="fa-solid fa-graduation-cap"></i> Scholar <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i>
+                    </a>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
     
-    <!-- Metrics Boxes (Top Right Corner) -->
-    <div style="display: flex; gap: 12px; min-width: 280px; flex-wrap: wrap; align-self: flex-start; margin-left: auto;">
-        <div class="glass-panel" style="padding: 15px 20px; text-align: center; flex: 1; min-width: 105px;">
-            <div style="font-size: 1.8rem; font-weight: 700; color: var(--color-primary); font-family: var(--font-eng); line-height: 1.2;"><?php echo count($publications); ?></div>
-            <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 6px;">ผลงานตีพิมพ์</div>
-            <div style="font-size: 0.72rem; color: var(--color-text-muted); border-top: 1px solid var(--border-glass); padding-top: 6px; display: flex; justify-content: center; gap: 6px; font-weight: 500;">
+    <!-- Right Section: 3 Metrics Boxes (Top Right Corner) -->
+    <div style="display: flex; gap: 10px; flex-shrink: 0;">
+        <div class="glass-panel" style="padding: 14px 18px; text-align: center; min-width: 95px;">
+            <div style="font-size: 1.8rem; font-weight: 700; color: var(--color-primary); font-family: var(--font-eng); line-height: 1.1;"><?php echo count($publications); ?></div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">ผลงานตีพิมพ์</div>
+            <div style="font-size: 0.7rem; color: var(--color-text-muted); border-top: 1px solid var(--border-glass); padding-top: 4px; display: flex; justify-content: center; gap: 4px; font-weight: 500;">
                 <span style="color: #34d399;">First: <?php echo $first_author_count; ?></span>
                 <span>|</span>
                 <span style="color: #60a5fa;">Co: <?php echo $co_author_count; ?></span>
             </div>
         </div>
-        <div class="glass-panel" style="padding: 15px 20px; text-align: center; flex: 1; min-width: 105px;">
-            <div style="font-size: 1.8rem; font-weight: 700; color: var(--color-accent); font-family: var(--font-eng);"><?php echo $total_citations; ?></div>
-            <div style="font-size: 0.75rem; color: var(--color-text-muted);">Citations รวม</div>
+        <div class="glass-panel" style="padding: 14px 18px; text-align: center; min-width: 95px;">
+            <div style="font-size: 1.8rem; font-weight: 700; color: var(--color-accent); font-family: var(--font-eng); line-height: 1.1;"><?php echo $total_citations; ?></div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">Citations รวม</div>
         </div>
-        <div class="glass-panel" style="padding: 15px 20px; text-align: center; flex: 1; min-width: 105px;">
-            <div style="font-size: 1.8rem; font-weight: 700; color: #10b981; font-family: var(--font-eng);"><?php echo get_researcher_h_index_peak($pdo, $researcher_id); ?></div>
-            <div style="font-size: 0.75rem; color: var(--color-text-muted);">h-index</div>
+        <div class="glass-panel" style="padding: 14px 18px; text-align: center; min-width: 95px;">
+            <div style="font-size: 1.8rem; font-weight: 700; color: #10b981; font-family: var(--font-eng); line-height: 1.1;"><?php echo get_researcher_h_index_peak($pdo, $researcher_id); ?></div>
+            <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">h-index</div>
         </div>
     </div>
 </div>
