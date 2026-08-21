@@ -1724,9 +1724,14 @@ include_once __DIR__ . '/includes/header.php';
             <i class="fa-solid fa-leaf" style="color: #10b981;"></i>
             <span>ความสอดคล้องกับเป้าหมายการพัฒนาที่ยั่งยืน (SDGs)</span>
         </h3>
-        <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 20px;">
+        <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 12px;">
             แสดงจำนวนผลงานวิจัยจำแนกตามเป้าหมาย SDGs ของสหประชาชาติ คลิกที่การ์ดเป้าหมายเพื่อแสดงรายชื่อผลงานตีพิมพ์ทั้งหมดที่เกี่ยวข้อง
         </p>
+        <a href="https://www.medsci.up.ac.th/msc_sdgs/" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; background: rgba(16, 185, 129, 0.1); color: #10b981; font-size: 0.85rem; font-weight: 600; text-decoration: none; margin-bottom: 20px; transition: var(--transition-smooth);" onmouseover="this.style.background='rgba(16, 185, 129, 0.2)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.1)'">
+            <i class="fa-solid fa-magnifying-glass-chart"></i>
+            สำรวจแนวโน้มคำสำคัญ SDGs เชิงลึกที่ระบบ msc_sdgs
+            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.75rem;"></i>
+        </a>
     </div>
 
     <?php if (empty($sdg_groups)): ?>
