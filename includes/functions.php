@@ -77,6 +77,17 @@ class ApiHttpException extends RuntimeException {
 }
 
 /**
+ * Phase 10: UP AI Connect's daily-quota-exhausted response is HTTP 401 with
+ * body {"error":"This model reached daily limit."} - NOT 429 like a normal
+ * rate limit, confirmed live 2026-08-21 by exhausting the real OpenAI
+ * bucket. Deliberately a distinct exception from ApiHttpException so
+ * fetch_llm_*_with_retry() can tell "this specific model's daily quota is
+ * gone, try a different model" apart from "credentials/request are
+ * actually invalid" (which is also a 401, but not retryable-by-switching).
+ */
+class ApiQuotaExceededException extends RuntimeException {}
+
+/**
  * Get country flag image URL from flagcdn.com based on country name mapping
  */
 function get_country_flag_url($country_name) {
@@ -561,6 +572,14 @@ function http_post_json($url, array $body, array $headers = [], $timeout = 30, $
             $retry_after = max(0, (int)$m[1] - time());
         }
         throw new ApiRateLimitException("HTTP POST failed ({$url}): rate limited (429)", $retry_after);
+    }
+
+    // UP AI Connect signals its per-model daily quota being exhausted as a
+    // plain 401 with this specific error text - not 429 - confirmed live
+    // 2026-08-21. Detect it specifically so callers can fall back to a
+    // different model rather than treating it as a generic auth failure.
+    if ($http_code === 401 && stripos($resp_body, 'daily limit') !== false) {
+        throw new ApiQuotaExceededException("HTTP POST failed ({$url}): model reached its daily quota - " . substr($resp_body, 0, 300));
     }
 
     if ($http_code < 200 || $http_code >= 300) {
@@ -1550,6 +1569,19 @@ const SDG_REFERENCE_LIST = [
 ];
 
 /**
+ * Phase 10: model fallback order for UP AI Connect calls. Each provider has
+ * its own separate daily token quota (confirmed live 2026-08-21: OpenAI hit
+ * 100% while Gemini/Claude/Deepseek/Perplexity stayed at 0% after running
+ * the classification batch against 513 real publications) - if the first
+ * model's quota is exhausted (ApiQuotaExceededException), the next model in
+ * this list is tried instead of failing the whole batch. Order favors the
+ * cheaper/faster tiers first, same reasoning as the original model choice;
+ * Claude is listed but has no confirmed cheap/fast tier in this project's
+ * Models list, so it sits last as a fallback of last resort.
+ */
+const UP_AI_CONNECT_MODEL_FALLBACK = ['gpt-5.4-mini', 'gemini-3.1-flash-lite', 'deepseek-v4-flash', 'claude-sonnet-4.6'];
+
+/**
  * Phase 10 (SEM-01/02): zero-shot-classify a publication's SDG alignment
  * via an LLM chat-completion call to UP AI Connect (university-provided AI
  * gateway - config/secrets.local.php UP_AI_CONNECT_BASE_URL/_API_KEY), in
@@ -1639,33 +1671,44 @@ function fetch_llm_sdg_classification($title, $abstract, $model = 'gpt-5.4-mini'
 /**
  * fetch_llm_sdg_classification() wrapped with the same retry contract used
  * throughout this project (timeout: 3x with 5s/15s/45s backoff; 429: wait
- * per header or 60s fallback). A 4xx that isn't 429 (e.g. bad request, auth
- * failure) is not retryable and is rethrown immediately.
+ * per header or 60s fallback), PLUS automatic model fallback: if a model's
+ * daily quota is exhausted (ApiQuotaExceededException - confirmed live
+ * 2026-08-21 when the real OpenAI bucket hit 100% mid-batch), moves to the
+ * next model in UP_AI_CONNECT_MODEL_FALLBACK rather than failing the whole
+ * batch. Pass an explicit $model to pin one model with no fallback; leave
+ * it null (default) to use the full fallback chain.
  *
- * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ * @throws RuntimeException if every model in the chain is exhausted or fails
  */
-function fetch_llm_sdg_classification_with_retry($title, $abstract, $model = 'gpt-5.4-mini') {
+function fetch_llm_sdg_classification_with_retry($title, $abstract, $model = null) {
+    $models_to_try = $model !== null ? [$model] : UP_AI_CONNECT_MODEL_FALLBACK;
     $backoff_schedule = [5, 15, 45];
     $last_exception = null;
 
-    for ($attempt = 0; $attempt < 3; $attempt++) {
-        try {
-            return fetch_llm_sdg_classification($title, $abstract, $model);
-        } catch (ApiRateLimitException $e) {
-            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
-            error_log("[upai][sdg] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
-            sleep($wait);
-            $last_exception = $e;
-        } catch (ApiTimeoutException $e) {
-            $wait = $backoff_schedule[$attempt] ?? 45;
-            error_log("[upai][sdg] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
-            sleep($wait);
-            $last_exception = $e;
+    foreach ($models_to_try as $current_model) {
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            try {
+                return fetch_llm_sdg_classification($title, $abstract, $current_model);
+            } catch (ApiQuotaExceededException $e) {
+                error_log("[upai][sdg] {$current_model} reached its daily quota, trying next model");
+                $last_exception = $e;
+                break;
+            } catch (ApiRateLimitException $e) {
+                $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+                error_log("[upai][sdg] rate limited (429) on {$current_model}, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+                sleep($wait);
+                $last_exception = $e;
+            } catch (ApiTimeoutException $e) {
+                $wait = $backoff_schedule[$attempt] ?? 45;
+                error_log("[upai][sdg] timeout/connection error on {$current_model}, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+                sleep($wait);
+                $last_exception = $e;
+            }
         }
     }
 
     throw new RuntimeException(
-        "UP AI Connect SDG classification failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+        "UP AI Connect SDG classification failed on all available models: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
     );
 }
 
@@ -1764,32 +1807,42 @@ function fetch_llm_expert_ranking($query, array $candidates, $model = 'gpt-5.4-m
 /**
  * fetch_llm_expert_ranking() wrapped with the same retry contract used
  * throughout this project (timeout: 3x with 5s/15s/45s backoff; 429: wait
- * per header or 60s fallback).
+ * per header or 60s fallback), PLUS automatic model fallback across
+ * UP_AI_CONNECT_MODEL_FALLBACK on ApiQuotaExceededException - same reasoning
+ * as fetch_llm_sdg_classification_with_retry(). Pass an explicit $model to
+ * pin one model with no fallback; leave it null (default) for the full chain.
  *
- * @throws RuntimeException if all 3 attempts are exhausted on a retryable error
+ * @throws RuntimeException if every model in the chain is exhausted or fails
  */
-function fetch_llm_expert_ranking_with_retry($query, array $candidates, $model = 'gpt-5.4-mini') {
+function fetch_llm_expert_ranking_with_retry($query, array $candidates, $model = null) {
+    $models_to_try = $model !== null ? [$model] : UP_AI_CONNECT_MODEL_FALLBACK;
     $backoff_schedule = [5, 15, 45];
     $last_exception = null;
 
-    for ($attempt = 0; $attempt < 3; $attempt++) {
-        try {
-            return fetch_llm_expert_ranking($query, $candidates, $model);
-        } catch (ApiRateLimitException $e) {
-            $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
-            error_log("[upai][expert_finder] rate limited (429), waiting {$wait}s before retry " . ($attempt + 1) . "/3");
-            sleep($wait);
-            $last_exception = $e;
-        } catch (ApiTimeoutException $e) {
-            $wait = $backoff_schedule[$attempt] ?? 45;
-            error_log("[upai][expert_finder] timeout/connection error, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
-            sleep($wait);
-            $last_exception = $e;
+    foreach ($models_to_try as $current_model) {
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            try {
+                return fetch_llm_expert_ranking($query, $candidates, $current_model);
+            } catch (ApiQuotaExceededException $e) {
+                error_log("[upai][expert_finder] {$current_model} reached its daily quota, trying next model");
+                $last_exception = $e;
+                break;
+            } catch (ApiRateLimitException $e) {
+                $wait = $e->retryAfterSeconds !== null ? $e->retryAfterSeconds : 60;
+                error_log("[upai][expert_finder] rate limited (429) on {$current_model}, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+                sleep($wait);
+                $last_exception = $e;
+            } catch (ApiTimeoutException $e) {
+                $wait = $backoff_schedule[$attempt] ?? 45;
+                error_log("[upai][expert_finder] timeout/connection error on {$current_model}, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
+                sleep($wait);
+                $last_exception = $e;
+            }
         }
     }
 
     throw new RuntimeException(
-        "UP AI Connect expert ranking failed after 3 attempts: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
+        "UP AI Connect expert ranking failed on all available models: " . ($last_exception ? $last_exception->getMessage() : 'unknown error')
     );
 }
 
