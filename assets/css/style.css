@@ -344,6 +344,18 @@ body.light-mode .hero h2 {
     box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.2);
 }
 
+select.search-input,
+select {
+    background-color: #1a1a2e;
+    color: var(--color-text-main);
+}
+
+select option {
+    background-color: #161626;
+    color: #ffffff;
+    padding: 8px 12px;
+}
+
 .search-icon {
     position: absolute;
     left: 14px;

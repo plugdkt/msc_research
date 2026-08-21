@@ -416,10 +416,10 @@ try {
             <h3 style="font-weight: 600;"><i class="fa-solid fa-list-check" style="color: var(--color-accent); margin-right: 8px;"></i> รายชื่อผลงานทั้งหมดในระบบ</h3>
             
             <form method="GET" action="publications.php" style="display: flex; gap: 8px; width: 100%; max-width: 600px; flex-wrap: wrap;">
-                <select name="intl" onchange="this.form.submit()" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 8px; color: var(--color-text-main); font-size: 0.85rem; padding: 6px 12px; outline: none; cursor: pointer;">
-                    <option value="">— ทุกความร่วมมือ —</option>
-                    <option value="1" <?php echo $filter_intl === '1' ? 'selected' : ''; ?>>ความร่วมมือต่างประเทศ (มีสถาบันนอก TH)</option>
-                    <option value="0" <?php echo $filter_intl === '0' ? 'selected' : ''; ?>>เฉพาะภายในประเทศไทย / ไม่ระบุ</option>
+                <select name="intl" onchange="this.form.submit()" style="background: #1a1a2e; border: 1px solid var(--border-glass); border-radius: 8px; color: var(--color-text-main); font-size: 0.85rem; padding: 6px 12px; outline: none; cursor: pointer;">
+                    <option value="" style="background: #1a1a2e; color: #ffffff;">— ทุกความร่วมมือ —</option>
+                    <option value="1" style="background: #1a1a2e; color: #ffffff;" <?php echo $filter_intl === '1' ? 'selected' : ''; ?>>ความร่วมมือต่างประเทศ (มีสถาบันนอก TH)</option>
+                    <option value="0" style="background: #1a1a2e; color: #ffffff;" <?php echo $filter_intl === '0' ? 'selected' : ''; ?>>เฉพาะภายในประเทศไทย / ไม่ระบุ</option>
                 </select>
                 <div class="search-box" style="flex: 1; min-width: 200px; margin: 0;">
                     <i class="fa-solid fa-magnifying-glass search-icon"></i>
