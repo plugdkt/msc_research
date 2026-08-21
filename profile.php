@@ -93,6 +93,7 @@ $max_rcr = !empty($rcr_list) ? max($rcr_list) : null;
 
 // Fetch Top Topics from OpenAlex for this researcher
 $top_topics = [];
+$dominant_fields = [];
 $pub_ids = array_column($publications, 'id');
 if (!empty($pub_ids)) {
     $placeholders = implode(',', array_fill(0, count($pub_ids), '?'));
@@ -106,6 +107,23 @@ if (!empty($pub_ids)) {
     ");
     $topics_stmt->execute($pub_ids);
     $top_topics = $topics_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Dominant OpenAlex field(s): aggregated at the field level (not the
+    // narrower topic level $top_topics already covers) so "which field is
+    // this researcher in" reflects how many of their DISTINCT publications
+    // fall under each field, not how many topic rows happen to repeat -
+    // a publication with 3 topics all under "Medicine" should count once,
+    // not 3 times.
+    $field_stmt = $pdo->prepare("
+        SELECT pt.field, COUNT(DISTINCT pt.publication_id) as pub_count
+        FROM publication_topics pt
+        WHERE pt.publication_id IN ($placeholders) AND pt.field IS NOT NULL AND pt.field != ''
+        GROUP BY pt.field
+        ORDER BY pub_count DESC
+        LIMIT 2
+    ");
+    $field_stmt->execute($pub_ids);
+    $dominant_fields = $field_stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Prepare Chart.js data
@@ -145,6 +163,16 @@ include_once __DIR__ . '/includes/header.php';
                 <i class="fa-solid fa-building-columns" style="color: var(--color-primary); width: 20px;"></i>
                 <span>ภาควิชา: <strong><?php echo htmlspecialchars($researcher['department']); ?></strong></span>
             </div>
+            <?php if (!empty($dominant_fields)): ?>
+            <div>
+                <i class="fa-solid fa-flask" style="color: #c084fc; width: 20px;"></i>
+                <span>สาขาการวิจัย (OpenAlex):
+                    <?php foreach ($dominant_fields as $i => $df): ?>
+                        <strong><?php echo htmlspecialchars($df['field']); ?></strong><span style="color: var(--color-text-muted); font-weight: 400;"> (<?php echo (int)$df['pub_count']; ?> ผลงาน)</span><?php echo $i < count($dominant_fields) - 1 ? ', ' : ''; ?>
+                    <?php endforeach; ?>
+                </span>
+            </div>
+            <?php endif; ?>
             <div>
                 <i class="fa-solid fa-user-tag" style="color: var(--color-accent); width: 20px;"></i>
                 <span>ประเภทบุคลากร: <strong><?php echo htmlspecialchars($researcher['researcher_type'] ?? 'สายวิชาการ'); ?></strong></span>

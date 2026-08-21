@@ -136,9 +136,13 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                     <i class="fa-solid fa-eye"></i> หน้าเว็บหลัก
                 </a>
                 
+                <a href="index.php" class="nav-link <?php echo $current_page === 'admin_dashboard' ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-gauge"></i> แดชบอร์ด
+                </a>
+
                 <div class="nav-dropdown">
-                    <a href="index.php" class="nav-link <?php echo in_array($current_page, ['admin_dashboard', 'admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_users', 'admin_import', 'admin_sync', 'admin_sdgs', 'admin_sdgs_llm', 'admin_topics', 'admin_rcr', 'admin_scimago', 'admin_expert_finder', 'admin_llm_review', 'admin_sdg_validation']) ? 'active' : ''; ?>">
-                        <i class="fa-solid fa-gauge"></i> แผงควบคุม <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
+                    <a href="researchers.php" class="nav-link <?php echo in_array($current_page, ['admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_import', 'admin_sync', 'admin_users']) ? 'active' : ''; ?>">
+                        <i class="fa-solid fa-database"></i> ข้อมูลหลัก <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
                     </a>
                     <div class="dropdown-menu">
                         <a href="researchers.php" class="dropdown-item <?php echo $current_page === 'admin_researchers' ? 'active' : ''; ?>">
@@ -161,20 +165,36 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                             <i class="fa-solid fa-users-cog"></i> จัดการแอดมิน
                         </a>
                         <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="nav-dropdown">
+                    <a href="scopus_quartiles.php" class="nav-link <?php echo in_array($current_page, ['admin_scimago', 'admin_topics', 'admin_rcr']) ? 'active' : ''; ?>">
+                        <i class="fa-solid fa-chart-line"></i> ตัวชี้วัดภายนอก <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
+                    </a>
+                    <div class="dropdown-menu">
                         <a href="scopus_quartiles.php" class="dropdown-item <?php echo $current_page === 'admin_scimago' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-award"></i> จัดการ Quartiles (Scopus)
-                        </a>
-                        <a href="sdg_import.php" class="dropdown-item <?php echo $current_page === 'admin_sdgs' ? 'active' : ''; ?>">
-                            <i class="fa-solid fa-leaf"></i> จัดการ SDGs (ผลงานวิจัย)
-                        </a>
-                        <a href="sdg_llm.php" class="dropdown-item <?php echo $current_page === 'admin_sdgs_llm' ? 'active' : ''; ?>">
-                            <i class="fa-solid fa-brain" style="color: #c084fc;"></i> วิเคราะห์ SDGs ด้วย AI (LLM)
                         </a>
                         <a href="topics_import.php" class="dropdown-item <?php echo $current_page === 'admin_topics' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-diagram-project"></i> Topic Prominence &amp; Trends
                         </a>
                         <a href="rcr_import.php" class="dropdown-item <?php echo $current_page === 'admin_rcr' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-chart-line"></i> RCR (NIH iCite)
+                        </a>
+                    </div>
+                </div>
+
+                <div class="nav-dropdown">
+                    <a href="sdg_import.php" class="nav-link <?php echo in_array($current_page, ['admin_sdgs', 'admin_sdgs_llm', 'admin_expert_finder', 'admin_llm_review', 'admin_sdg_validation']) ? 'active' : ''; ?>">
+                        <i class="fa-solid fa-brain" style="color: #c084fc;"></i> SDG &amp; AI <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <a href="sdg_import.php" class="dropdown-item <?php echo $current_page === 'admin_sdgs' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-leaf"></i> จัดการ SDGs (พจนานุกรมคำสำคัญ)
+                        </a>
+                        <a href="sdg_llm.php" class="dropdown-item <?php echo $current_page === 'admin_sdgs_llm' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-robot"></i> วิเคราะห์ SDGs ด้วย AI (LLM)
                         </a>
                         <a href="expert_finder.php" class="dropdown-item <?php echo $current_page === 'admin_expert_finder' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-magnifying-glass-chart"></i> ค้นหาผู้เชี่ยวชาญ (AI)
