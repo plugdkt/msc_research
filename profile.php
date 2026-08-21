@@ -158,33 +158,40 @@ include_once __DIR__ . '/includes/header.php';
             <?php echo htmlspecialchars(($researcher['title_en'] ?? '') . ' ' . $researcher['first_name_en'] . ' ' . $researcher['last_name_en']); ?>
         </div>
         
-        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; font-size: 0.95rem;">
-            <div>
-                <i class="fa-solid fa-building-columns" style="color: var(--color-primary); width: 20px;"></i>
-                <span>ภาควิชา: <strong><?php echo htmlspecialchars($researcher['department']); ?></strong></span>
-            </div>
-            <?php if (!empty($dominant_fields)): ?>
-            <div>
-                <i class="fa-solid fa-flask" style="color: #c084fc; width: 20px;"></i>
-                <span>สาขาการวิจัย (OpenAlex):
-                    <?php foreach ($dominant_fields as $i => $df): ?>
-                        <strong><?php echo htmlspecialchars($df['field']); ?></strong><span style="color: var(--color-text-muted); font-weight: 400;"> (<?php echo (int)$df['pub_count']; ?> ผลงาน)</span><?php echo $i < count($dominant_fields) - 1 ? ', ' : ''; ?>
-                    <?php endforeach; ?>
-                </span>
-            </div>
-            <?php endif; ?>
-            <div>
-                <i class="fa-solid fa-user-tag" style="color: var(--color-accent); width: 20px;"></i>
-                <span>ประเภทบุคลากร: <strong><?php echo htmlspecialchars($researcher['researcher_type'] ?? 'สายวิชาการ'); ?></strong></span>
-            </div>
+        <!-- Identity meta: compact single-row facts, dot-separated -->
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 0.9rem; color: var(--color-text-muted);">
+            <span style="display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-building-columns" style="color: var(--color-primary);"></i>
+                <span style="color: var(--color-text-main); font-weight: 600;"><?php echo htmlspecialchars($researcher['department']); ?></span>
+            </span>
+            <span style="opacity: 0.4;">•</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-user-tag" style="color: var(--color-accent);"></i>
+                <?php echo htmlspecialchars($researcher['researcher_type'] ?? 'สายวิชาการ'); ?>
+            </span>
             <?php if (!empty($researcher['email'])): ?>
-                <div>
-                    <i class="fa-solid fa-envelope" style="color: var(--color-secondary); width: 20px;"></i>
-                    <span>อีเมล: <a href="mailto:<?php echo htmlspecialchars($researcher['email']); ?>" style="color: inherit; text-decoration: underline;"><?php echo htmlspecialchars($researcher['email']); ?></a></span>
-                </div>
+                <span style="opacity: 0.4;">•</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-envelope" style="color: var(--color-secondary);"></i>
+                    <a href="mailto:<?php echo htmlspecialchars($researcher['email']); ?>" style="color: inherit; text-decoration: none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'"><?php echo htmlspecialchars($researcher['email']); ?></a>
+                </span>
             <?php endif; ?>
         </div>
-        
+
+        <!-- Dominant OpenAlex field(s): computed insight, styled distinctly from the identity facts above -->
+        <?php if (!empty($dominant_fields)): ?>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px;">
+            <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;">สาขาการวิจัย</span>
+            <?php foreach ($dominant_fields as $df): ?>
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: #818cf8; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); padding: 4px 12px; border-radius: 20px;">
+                    <i class="fa-solid fa-flask" style="font-size: 0.72rem;"></i>
+                    <?php echo htmlspecialchars($df['field']); ?>
+                    <span style="color: var(--color-text-muted); font-weight: 400;">· <?php echo (int)$df['pub_count']; ?> ผลงาน</span>
+                </span>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <!-- External Profiles Links -->
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <?php if (!empty($researcher['orcid_id'])): ?>
