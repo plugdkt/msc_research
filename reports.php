@@ -376,6 +376,7 @@ $quartile_where = !empty($quartile_pub_conditions) ? "WHERE " . implode(" AND ",
 
 $stmtAllPubs = $pdo->prepare("
     SELECT p.id, p.title, p.authors, p.journal_name, p.publish_year, p.doi, p.url, p.quartile, p.source, p.citation_count, p.countries, p.funding_sponsor, p.funding_no, p.funding_amount, p.sdg_primary, p.sdg_secondary, p.sdg_tertiary, p.sdg_rationale, p.rcr, p.nih_percentile,
+           p.llm_sdg_primary, p.llm_confidence_primary, p.llm_sdg_secondary, p.llm_confidence_secondary, p.llm_rationale, p.llm_model,
            GROUP_CONCAT(DISTINCT CONCAT(COALESCE(CONCAT(r2.title_th, ' '), ''), COALESCE(r2.first_name_th, ''), ' ', COALESCE(r2.last_name_th, ''), '||', COALESCE(r2.first_name_en, ''), '||', COALESCE(r2.last_name_en, '')) SEPARATOR '|||') AS linked_researchers
     FROM researcher_publications rp
     JOIN researchers r ON rp.researcher_id = r.id
@@ -1865,13 +1866,28 @@ include_once __DIR__ . '/includes/header.php';
                                     <?php if (!empty($pub['sdg_tertiary'])): ?>
                                         <?php echo render_sdg_badge($pub['sdg_tertiary'], false, '0.68rem'); ?>
                                     <?php endif; ?>
+
+                                    <?php if (!empty($pub['llm_sdg_primary'])): ?>
+                                        <?php echo render_llm_sdg_badge($pub['llm_sdg_primary'], $pub['llm_confidence_primary'], true, '0.68rem'); ?>
+                                    <?php endif; ?>
+                                    <?php if (!empty($pub['llm_sdg_secondary'])): ?>
+                                        <?php echo render_llm_sdg_badge($pub['llm_sdg_secondary'], $pub['llm_confidence_secondary'], false, '0.68rem'); ?>
+                                    <?php endif; ?>
                                 </div>
 
-                                <!-- SDG Rationale -->
+                                <!-- SDG Rationale (keyword dictionary classifier) -->
                                 <?php if (!empty($pub['sdg_rationale'])): ?>
                                     <div style="margin-top: 8px; font-size: 0.78rem; color: #10b981; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.2); padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
                                         <i class="fa-solid fa-circle-info"></i>
-                                        <span><strong>เกณฑ์ประเมิน:</strong> <?php echo htmlspecialchars($pub['sdg_rationale']); ?></span>
+                                        <span><strong>เกณฑ์ประเมิน (พจนานุกรมคำสำคัญ):</strong> <?php echo htmlspecialchars($pub['sdg_rationale']); ?></span>
+                                    </div>
+                                <?php endif; ?>
+
+                                <!-- LLM Rationale (Phase 10 zero-shot classifier, shown alongside - never replaces the above) -->
+                                <?php if (!empty($pub['llm_rationale'])): ?>
+                                    <div style="margin-top: 8px; font-size: 0.78rem; color: #8b5cf6; background: rgba(139, 92, 246, 0.05); border: 1px dashed rgba(139, 92, 246, 0.25); padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fa-solid fa-robot"></i>
+                                        <span><strong>วิเคราะห์โดย AI (<?php echo htmlspecialchars($pub['llm_model'] ?? 'LLM'); ?>):</strong> <?php echo htmlspecialchars($pub['llm_rationale']); ?></span>
                                     </div>
                                 <?php endif; ?>
 

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // admin/sdg_llm.php
 // Phase 10 (Zero-Shot LLM AI Layer): status panel + one-click batch
 // classification tool using UP AI Connect Gateway (gpt-5.4-mini).
@@ -25,13 +25,17 @@ $pubs_pending = max(0, $pubs_with_abstract - $pubs_checked);
 $ai_configured = defined('UP_AI_CONNECT_BASE_URL') && defined('UP_AI_CONNECT_API_KEY') && !empty(UP_AI_CONNECT_BASE_URL) && !empty(UP_AI_CONNECT_API_KEY);
 
 // Fetch recent LLM-classified sample
+// Column names here match the real schema from
+// database/add_llm_classification_columns.php (llm_confidence_primary/
+// secondary, llm_checked_at) - not llm_sdg_confidence_*/llm_classified_at,
+// which don't exist and would throw a PDO exception on the query below.
 $stmtSample = $pdo->query("
-    SELECT id, title, publish_year, llm_sdg_primary, llm_sdg_confidence_primary, 
-           llm_sdg_secondary, llm_sdg_confidence_secondary, llm_rationale, 
-           llm_semantic_tags, llm_model, llm_classified_at
+    SELECT id, title, publish_year, llm_sdg_primary, llm_confidence_primary,
+           llm_sdg_secondary, llm_confidence_secondary, llm_rationale,
+           llm_semantic_tags, llm_model, llm_checked_at
     FROM `publications`
     WHERE llm_sdg_primary IS NOT NULL
-    ORDER BY llm_classified_at DESC, id DESC
+    ORDER BY llm_checked_at DESC, id DESC
     LIMIT 10
 ");
 $recent_samples = $stmtSample ? $stmtSample->fetchAll() : [];
@@ -161,13 +165,13 @@ $recent_samples = $stmtSample ? $stmtSample->fetchAll() : [];
                         <td style="padding: 10px 8px;">
                             <?php if ($s['llm_sdg_primary']): ?>
                                 <span class="badge" style="font-size: 0.75rem; background: #a855f7; color: white; padding: 3px 8px; border-radius: 4px; font-weight: 700;">
-                                    SDG <?php echo $s['llm_sdg_primary']; ?> (<?php echo $s['llm_sdg_confidence_primary']; ?>%)
+                                    SDG <?php echo $s['llm_sdg_primary']; ?> (<?php echo $s['llm_confidence_primary']; ?>%)
                                 </span>
                             <?php endif; ?>
                             <?php if ($s['llm_sdg_secondary']): ?>
                                 <div style="margin-top: 4px;">
                                     <span class="badge" style="font-size: 0.68rem; background: transparent; border: 1px solid #c084fc; color: #c084fc; padding: 2px 6px;">
-                                        SDG <?php echo $s['llm_sdg_secondary']; ?> (<?php echo $s['llm_sdg_confidence_secondary']; ?>%)
+                                        SDG <?php echo $s['llm_sdg_secondary']; ?> (<?php echo $s['llm_confidence_secondary']; ?>%)
                                     </span>
                                 </div>
                             <?php endif; ?>
@@ -291,21 +295,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     const res = await resp.json();
 
-                    if (res.success) {
-                        if (res.status === 'applied') {
-                            applied++;
-                            appliedCountEl.textContent = applied;
-                            const tagStr = (res.semantic_tags || []).join(', ');
-                            log(`✓ #${item.id}: SDG ${res.sdg_primary} (${res.confidence_primary}%) | ${tagStr}`, 'success');
-                        } else if (res.status === 'skipped_no_abstract') {
-                            skipped++;
-                            skippedCountEl.textContent = skipped;
-                            log(`- #${item.id}: ไม่มีบทคัดย่อ (ข้าม)`, 'info');
-                        }
+                    // admin/classify_sdgs_llm.php's real response shape:
+                    // {status:'applied', sdg_primary:'SDG N', confidence_primary:N, ...}
+                    // {status:'skipped'|'no_match', reason:'...'}
+                    // {status:'error', reason:'...'} or top-level {error:'...'}
+                    // - not {success:true/false, status:'skipped_no_abstract', semantic_tags:[...]}.
+                    if (res.status === 'applied') {
+                        applied++;
+                        appliedCountEl.textContent = applied;
+                        const secondary = res.sdg_secondary ? `, ${res.sdg_secondary} (${res.confidence_secondary}%)` : '';
+                        log(`✓ #${item.id}: ${res.sdg_primary} (${res.confidence_primary}%)${secondary}`, 'success');
+                    } else if (res.status === 'skipped' || res.status === 'no_match') {
+                        skipped++;
+                        skippedCountEl.textContent = skipped;
+                        log(`- #${item.id}: ${res.reason || 'ข้าม'}`, 'info');
                     } else {
                         errors++;
                         errorCountEl.textContent = errors;
-                        log(`✗ #${item.id}: ${res.error || 'ผิดพลาด'}`, 'error');
+                        log(`✗ #${item.id}: ${res.reason || res.error || 'ผิดพลาด'}`, 'error');
                     }
                 } catch (err) {
                     errors++;

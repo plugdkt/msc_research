@@ -137,7 +137,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                 </a>
                 
                 <div class="nav-dropdown">
-                    <a href="index.php" class="nav-link <?php echo in_array($current_page, ['admin_dashboard', 'admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_users', 'admin_import', 'admin_sync', 'admin_sdgs', 'admin_sdgs_llm', 'admin_topics', 'admin_rcr', 'admin_scimago']) ? 'active' : ''; ?>">
+                    <a href="index.php" class="nav-link <?php echo in_array($current_page, ['admin_dashboard', 'admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_users', 'admin_import', 'admin_sync', 'admin_sdgs', 'admin_sdgs_llm', 'admin_topics', 'admin_rcr', 'admin_scimago', 'admin_expert_finder', 'admin_llm_review', 'admin_sdg_validation']) ? 'active' : ''; ?>">
                         <i class="fa-solid fa-gauge"></i> แผงควบคุม <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
                     </a>
                     <div class="dropdown-menu">
@@ -175,6 +175,15 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                         </a>
                         <a href="rcr_import.php" class="dropdown-item <?php echo $current_page === 'admin_rcr' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-chart-line"></i> RCR (NIH iCite)
+                        </a>
+                        <a href="expert_finder.php" class="dropdown-item <?php echo $current_page === 'admin_expert_finder' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-magnifying-glass-chart"></i> ค้นหาผู้เชี่ยวชาญ (AI)
+                        </a>
+                        <a href="llm_review.php" class="dropdown-item <?php echo $current_page === 'admin_llm_review' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-user-check"></i> ตรวจสอบผลจำแนก AI
+                        </a>
+                        <a href="sdg_validation.php" class="dropdown-item <?php echo $current_page === 'admin_sdg_validation' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-clipboard-check"></i> วัดความแม่นยำ SDG (P/R/F1)
                         </a>
                     </div>
                 </div>
