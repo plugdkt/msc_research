@@ -311,6 +311,24 @@ if (isset($_POST['upload_csv'])) {
         </div>
     </div>
 
+    <!-- Phase 10: AI LLM Zero-Shot Banner -->
+    <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); padding: 14px 18px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-brain" style="color: #c084fc; font-size: 1.3rem;"></i>
+            <div>
+                <div style="font-weight: 600; font-size: 0.9rem; color: #c084fc;">
+                    วิเคราะห์ความสอดคล้อง SDGs ด้วย AI (UP AI Connect Gateway)
+                </div>
+                <div style="font-size: 0.78rem; color: var(--color-text-muted);">
+                    ใช้โมเดล Zero-Shot LLM (gpt-5.4-mini) วิเคราะห์ Abstract พร้อมให้เหตุผลภาษาไทยและ Semantic Tags
+                </div>
+            </div>
+        </div>
+        <a href="sdg_llm.php" class="btn-premium" style="padding: 7px 15px; font-size: 0.82rem; background: linear-gradient(135deg, #a855f7, #6366f1); text-decoration: none;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> ไปยังหน้าจำแนกด้วย AI <i class="fa-solid fa-arrow-right" style="font-size: 0.7rem; margin-left: 4px;"></i>
+        </a>
+    </div>
+
     <!-- Auto-Classify All -->
     <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 16px 18px; border-radius: 10px; margin-bottom: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
