@@ -41,9 +41,11 @@ if ($is_cli || $is_cron_token) {
 //    admin_header.php further down was exactly the bug found and fixed in
 //    admin/researchers.php (an unauthenticated request executed every
 //    action handler before that include was ever reached).
-// 2. ADMIN-03: an already-running sync must reject with HTTP 409, which is
-//    only possible before admin_header.php prints the page's HTML - PHP
-//    can't change the status code once output has started.
+// 2. ADMIN-03: the CLI/cron-token whole-batch path above must reject an
+//    already-running sync with HTTP 409 before any HTML is printed - PHP
+//    can't change the status code once output has started. The web-driven
+//    per-researcher path (admin/sync_ajax.php) makes that same check on its
+//    own request/response, independent of this page's initial load.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -53,44 +55,11 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 // ADMIN-04: every sync trigger records who triggered it in sync_log.triggered_by.
+// Web-triggered syncs now run through admin/sync_ajax.php's per-researcher
+// AJAX loop (live progress, see JS below) instead of blocking this request
+// for the whole batch - CLI/cron still call run_synchronization() directly
+// (top of this file) for a single, non-interactive whole-batch run.
 $current_admin = $_SESSION['admin_username'] ?? 'unknown-admin';
-
-$sync_logs = [];
-$sync_summary = null;
-$sync_triggered = false;
-$sync_type = 'individual';
-
-if (isset($_GET['id'])) {
-    $sync_triggered = true;
-    $sync_type = 'individual';
-    $sync_result = run_synchronization($pdo, false, (int)$_GET['id'], $current_admin);
-    $sync_logs = $sync_result['logs'];
-    $sync_summary = $sync_result['summary'];
-}
-
-if (isset($_POST['trigger_sync'])) {
-    $sync_triggered = true;
-    $sync_type = 'all';
-    $sync_result = run_synchronization($pdo, false, null, $current_admin);
-    $sync_logs = $sync_result['logs'];
-    $sync_summary = $sync_result['summary'];
-}
-
-if (isset($_POST['trigger_individual_sync'])) {
-    $sync_triggered = true;
-    $sync_type = 'individual';
-    $target_id = (int)$_POST['target_researcher_id'];
-    $sync_result = run_synchronization($pdo, false, $target_id, $current_admin);
-    $sync_logs = $sync_result['logs'];
-    $sync_summary = $sync_result['summary'];
-}
-
-// ADMIN-03 / SPEC.md §8: a rejected-because-already-running trigger responds
-// with 409 Conflict, matching the documented API contract. Must happen
-// before admin_header.php prints any HTML.
-if (!empty($sync_summary['rejected_already_running'])) {
-    http_response_code(409);
-}
 
 $current_page = 'admin_sync';
 $page_title = 'ซิงค์ข้อมูลผ่าน API - Admin Panel';
@@ -206,68 +175,25 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
     // sync (e.g. the PHP process was killed mid-run) rather than a real
     // lock, so a stuck row can't jam every future sync forever.
     $stale_after_minutes = 30;
-    try {
-        $stmt = $pdo->prepare("
-            SELECT id, started_at FROM `sync_log`
-            WHERE status = 'running' AND started_at > (NOW() - INTERVAL :mins MINUTE)
-            ORDER BY started_at DESC LIMIT 1
-        ");
-        $stmt->execute([':mins' => $stale_after_minutes]);
-        $already_running = $stmt->fetch();
-
-        if ($already_running) {
-            $msg = "มีการซิงค์กำลังทำงานอยู่ (เริ่มเมื่อ " . format_thai_datetime($already_running['started_at']) . ") กรุณารอให้เสร็จก่อน";
-            if ($quiet) {
-                echo $msg . "\n";
-            }
-            return ['logs' => [["researcher" => "-", "details" => [$msg], "has_error" => true]], 'summary' => [
-                'researchers_processed' => 0, 'publications_synced' => 0,
-                'records_skipped' => 0, 'duplicate_scopus_ids_found' => 0,
-                'rejected_already_running' => true,
-            ]];
+    $lock = open_sync_log($pdo, $triggered_by, $stale_after_minutes);
+    if ($lock['rejected']) {
+        $msg = "มีการซิงค์กำลังทำงานอยู่ (เริ่มเมื่อ " . format_thai_datetime($lock['rejected']['started_at']) . ") กรุณารอให้เสร็จก่อน";
+        if ($quiet) {
+            echo $msg . "\n";
         }
-
-        // No active lock found - any 'running' row still around is stale.
-        // Close it out so it stops shadowing the check above and doesn't
-        // confuse an admin reading sync_log history later.
-        $pdo->exec("
-            UPDATE `sync_log` SET status = 'failed', completed_at = NOW(),
-                error_message = 'ซิงค์ครั้งก่อนไม่จบตามปกติ (อาจถูกยกเลิกกลางคัน) ระบบปิดสถานะอัตโนมัติ'
-            WHERE status = 'running'
-        ");
-    } catch (PDOException $e) {
-        // sync_log may not exist yet on a pre-migration database - don't
-        // let the mutex check itself block the sync.
-        error_log("[sync] failed to check for an in-progress sync: " . $e->getMessage());
+        return ['logs' => [["researcher" => "-", "details" => [$msg], "has_error" => true]], 'summary' => [
+            'researchers_processed' => 0, 'publications_synced' => 0,
+            'records_skipped' => 0, 'duplicate_scopus_ids_found' => 0,
+            'rejected_already_running' => true,
+        ]];
     }
-
-    $sync_log_id = null;
-    try {
-        $stmt = $pdo->prepare("INSERT INTO `sync_log` (status, triggered_by) VALUES ('running', ?)");
-        $stmt->execute([$triggered_by]);
-        $sync_log_id = $pdo->lastInsertId();
-    } catch (PDOException $e) {
-        // Don't let a sync_log write failure block the sync itself — just log it.
-        error_log("[sync] failed to open sync_log row: " . $e->getMessage());
-    }
+    $sync_log_id = $lock['sync_log_id'];
 
     // SYNC-04: find Scopus Author IDs shared by more than one researcher
     // *before* touching the API, so those researchers can be excluded from
     // this run rather than silently synced (which would attribute one
     // person's publications to both records) or auto-merged.
-    $duplicate_scopus_ids = [];
-    try {
-        $stmt = $pdo->query("
-            SELECT `scopus_author_id`
-            FROM `researchers`
-            WHERE `scopus_author_id` IS NOT NULL AND `scopus_author_id` != ''
-            GROUP BY `scopus_author_id`
-            HAVING COUNT(*) > 1
-        ");
-        $duplicate_scopus_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    } catch (PDOException $e) {
-        error_log("[sync] failed to check for duplicate Scopus Author IDs: " . $e->getMessage());
-    }
+    $duplicate_scopus_ids = find_duplicate_scopus_author_ids($pdo);
 
     // Fetch researchers (all or targeted)
     try {
@@ -301,42 +227,13 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
     foreach ($researchers as $r) {
         $index++;
         $name = trim($r['title_th'] . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']);
-        $logs_entry = ["researcher" => $name, "details" => [], "has_error" => false];
+        $result = sync_one_researcher($pdo, $r, $duplicate_scopus_ids);
+        $logs_entry = ["researcher" => $name, "details" => $result['details'], "has_error" => $result['has_error']];
 
-        if (!empty($r['scopus_author_id']) && in_array($r['scopus_author_id'], $duplicate_scopus_ids, true)) {
-            $logs_entry["has_error"] = true;
+        $publications_synced += $result['publications_synced'];
+        $records_skipped += $result['records_skipped'];
+        if ($result['has_error']) {
             $error_count++;
-            $logs_entry["details"][] = "ข้าม: Scopus Author ID '{$r['scopus_author_id']}' ซ้ำกับนักวิจัยรายอื่นในระบบ — ปฏิเสธการซิงค์ ต้องตรวจสอบด้วยมือก่อน";
-        } elseif (!empty($r['scopus_author_id'])) {
-            try {
-                $scopus_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : null;
-                if (!$scopus_key) {
-                    throw new RuntimeException('ไม่พบ SCOPUS_API_KEY ในการตั้งค่าระบบ');
-                }
-                $skipped_here = 0;
-                $pubs = fetch_scopus_publications_with_retry($r['scopus_author_id'], $scopus_key, $skipped_here);
-                $success = 0;
-                foreach ($pubs as $pub) {
-                    if (add_or_update_publication($pdo, $pub, $r['id'])) {
-                        $success++;
-                    }
-                }
-                $publications_synced += $success;
-                $records_skipped += $skipped_here;
-
-                $detail = "Scopus: ดึงสำเร็จ " . count($pubs) . " รายการ (บันทึก/อัปเดตแล้ว {$success} รายการ)";
-                if ($skipped_here > 0) {
-                    $detail .= ", ข้าม {$skipped_here} รายการ (ไม่มี DOI หรือชื่อผู้แต่ง)";
-                }
-                $logs_entry["details"][] = $detail;
-            } catch (Throwable $e) {
-                $logs_entry["has_error"] = true;
-                $error_count++;
-                $logs_entry["details"][] = "Scopus: ล้มเหลว - " . $e->getMessage();
-                error_log("[sync][Scopus][researcher {$r['id']}] " . $e->getMessage());
-            }
-        } else {
-            $logs_entry["details"][] = "ไม่มี Scopus Author ID สำหรับนักวิจัยรายนี้";
         }
 
         $researchers_processed++;
@@ -480,19 +377,19 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
             <i class="fa-solid fa-rotate-right" style="color: var(--color-primary);"></i>
         </div>
 
-        <form method="POST" style="margin-bottom: 25px;">
-            <button type="submit" name="trigger_sync" class="btn-premium" style="width: 100%; justify-content: center; padding: 14px; font-size: 1rem;">
+        <div style="margin-bottom: 25px;">
+            <button type="button" id="sync-all-btn" class="btn-premium" style="width: 100%; justify-content: center; padding: 14px; font-size: 1rem;">
                 <i class="fa-solid fa-cloud-arrow-down"></i> ซิงค์ของทุกคนพร้อมกัน
             </button>
-        </form>
+        </div>
 
-        <form method="POST" style="margin-bottom: 25px; border-top: 1px solid var(--border-glass); padding-top: 20px;">
+        <div style="margin-bottom: 25px; border-top: 1px solid var(--border-glass); padding-top: 20px;">
             <h4 style="color: var(--color-text-main); margin-bottom: 12px; font-size: 0.9rem;">
                 <i class="fa-solid fa-user-gear"></i> ซิงค์เฉพาะบางรายชื่อ
             </h4>
             <div style="margin-bottom: 12px;">
                 <label style="font-size: 0.75rem; color: var(--color-text-muted); display: block; margin-bottom: 6px;">เลือกนักวิจัย</label>
-                <select name="target_researcher_id" class="search-input" style="padding: 8px 12px; height: auto;" required>
+                <select id="target_researcher_id" class="search-input" style="padding: 8px 12px; height: auto;" required>
                     <option value="">-- เลือกนักวิจัย --</option>
                     <?php foreach ($all_researchers_list as $res): ?>
                         <option value="<?php echo $res['id']; ?>">
@@ -501,10 +398,14 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
                     <?php endforeach; ?>
                 </select>
             </div>
-            <button type="submit" name="trigger_individual_sync" class="btn-premium" style="width: 100%; justify-content: center; padding: 12px;">
+            <button type="button" id="sync-individual-btn" class="btn-premium" style="width: 100%; justify-content: center; padding: 12px;">
                 <i class="fa-solid fa-rotate"></i> เริ่มซิงค์เฉพาะรายบุคคล
             </button>
-        </form>
+        </div>
+
+        <button type="button" id="sync-stop-btn" class="btn-premium" style="width: 100%; justify-content: center; padding: 10px; margin-bottom: 25px; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: #f87171; display: none;">
+            <i class="fa-solid fa-stop"></i> หยุดการซิงค์
+        </button>
 
 
         <div style="border-top: 1px solid var(--border-glass); padding-top: 20px; margin-bottom: 25px;">
@@ -568,50 +469,238 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
         </div>
     </div>
 
-    <!-- Right panel: Live Logs -->
+    <!-- Right panel: Live Progress -->
     <div class="glass-panel" style="padding: 24px;">
         <h3 style="margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
-            <i class="fa-solid fa-terminal" style="color: var(--color-accent);"></i> ประวัติการซิงค์ข้อมูล
+            <i class="fa-solid fa-terminal" style="color: var(--color-accent);"></i> สถานะการซิงค์ (session นี้)
         </h3>
 
-        <?php if (!$sync_triggered): ?>
-            <div style="text-align: center; color: var(--color-text-muted); padding: 40px;">
-                <i class="fa-solid fa-spinner" style="font-size: 3rem; margin-bottom: 16px; display: block;"></i>
-                เลือกการควบคุมซิงค์ทางซ้ายเพื่อเริ่มต้นดึงข้อมูลจาก API
+        <div id="sync-idle" style="text-align: center; color: var(--color-text-muted); padding: 40px;">
+            <i class="fa-solid fa-arrow-pointer" style="font-size: 3rem; margin-bottom: 16px; display: block;"></i>
+            เลือกการควบคุมซิงค์ทางซ้ายเพื่อเริ่มต้นดึงข้อมูลจาก API
+        </div>
+
+        <div id="sync-progress" style="display: none;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 6px;">
+                <span id="sync-status-text">กำลังเริ่มต้น...</span>
+                <span id="sync-counter">0 / 0</span>
             </div>
-        <?php else: ?>
-            <?php if ($sync_summary): ?>
-                <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 12px 15px; margin-bottom: 15px; font-size: 0.85rem; display: flex; gap: 20px; flex-wrap: wrap;">
-                    <span>นักวิจัยที่ประมวลผล: <strong><?php echo (int)$sync_summary['researchers_processed']; ?></strong></span>
-                    <span>ผลงานที่บันทึก/อัปเดต: <strong><?php echo (int)$sync_summary['publications_synced']; ?></strong></span>
-                    <span>ข้าม (ไม่มี DOI/ผู้แต่ง): <strong><?php echo (int)$sync_summary['records_skipped']; ?></strong></span>
-                    <?php if ($sync_summary['duplicate_scopus_ids_found'] > 0): ?>
-                        <span style="color: var(--color-danger, #c55);">Scopus ID ซ้ำ (ปฏิเสธ): <strong><?php echo (int)$sync_summary['duplicate_scopus_ids_found']; ?></strong></span>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-            <div style="display: flex; flex-direction: column; gap: 15px;">
-                <?php foreach ($sync_logs as $log): ?>
-                    <div style="background: rgba(255,255,255,0.02); border: 1px solid <?php echo !empty($log['has_error']) ? 'var(--color-danger, #a33)' : 'var(--border-glass)'; ?>; border-radius: 8px; padding: 15px;">
-                        <h4 style="color: var(--color-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                            <i class="fa-solid fa-user-circle"></i>
-                            <?php echo htmlspecialchars($log['researcher']); ?>
-                        </h4>
-                        <ul style="list-style: none; padding-left: 20px; font-size: 0.85rem; color: var(--color-text-muted); line-height: 1.6;">
-                            <?php foreach ($log['details'] as $detail):
-                                $is_failure = (strpos($detail, 'ล้มเหลว') !== false); ?>
-                                <li>
-                                    <i class="fa-solid <?php echo $is_failure ? 'fa-xmark' : 'fa-check'; ?>" style="color: <?php echo $is_failure ? 'var(--color-danger, #c55)' : 'var(--color-success)'; ?>; margin-right: 6px;"></i>
-                                    <?php echo htmlspecialchars($detail); ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-                <?php endforeach; ?>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; height: 10px; overflow: hidden;">
+                <div id="sync-bar" style="background: linear-gradient(90deg, var(--color-primary), var(--color-accent)); height: 100%; width: 0%; transition: width 0.2s ease;"></div>
             </div>
-        <?php endif; ?>
+
+            <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 12px 15px; margin: 15px 0; font-size: 0.85rem; display: flex; gap: 20px; flex-wrap: wrap;">
+                <span>นักวิจัยที่ประมวลผล: <strong id="sync-processed-count">0</strong></span>
+                <span>ผลงานที่บันทึก/อัปเดต: <strong id="sync-pubs-count">0</strong></span>
+                <span>ข้าม (ไม่มี DOI/ผู้แต่ง): <strong id="sync-skipped-count">0</strong></span>
+                <span style="color: #f87171;">ผิดพลาด/ปฏิเสธ: <strong id="sync-error-count">0</strong></span>
+            </div>
+
+            <div id="sync-log" style="display: flex; flex-direction: column-reverse; gap: 15px; max-height: 480px; overflow-y: auto;"></div>
+        </div>
     </div>
 </div>
+
+<script>
+const SYNC_CSRF_TOKEN = "<?php echo htmlspecialchars(get_csrf_token()); ?>";
+document.addEventListener('DOMContentLoaded', () => {
+    const allBtn = document.getElementById('sync-all-btn');
+    const individualBtn = document.getElementById('sync-individual-btn');
+    const stopBtn = document.getElementById('sync-stop-btn');
+    const targetSelect = document.getElementById('target_researcher_id');
+
+    const idleBox = document.getElementById('sync-idle');
+    const progressBox = document.getElementById('sync-progress');
+    const statusText = document.getElementById('sync-status-text');
+    const counterText = document.getElementById('sync-counter');
+    const progressBar = document.getElementById('sync-bar');
+    const processedCountEl = document.getElementById('sync-processed-count');
+    const pubsCountEl = document.getElementById('sync-pubs-count');
+    const skippedCountEl = document.getElementById('sync-skipped-count');
+    const errorCountEl = document.getElementById('sync-error-count');
+    const logBox = document.getElementById('sync-log');
+
+    let isRunning = false;
+    let shouldStop = false;
+
+    function addLogCard(entry) {
+        const card = document.createElement('div');
+        card.style.background = 'rgba(255,255,255,0.02)';
+        card.style.border = '1px solid ' + (entry.has_error ? 'var(--color-danger, #a33)' : 'var(--border-glass)');
+        card.style.borderRadius = '8px';
+        card.style.padding = '15px';
+
+        const title = document.createElement('h4');
+        title.style.color = 'var(--color-primary)';
+        title.style.marginBottom = '8px';
+        title.style.display = 'flex';
+        title.style.alignItems = 'center';
+        title.style.gap = '8px';
+        title.innerHTML = '<i class="fa-solid fa-user-circle"></i> ' + entry.researcher.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+        card.appendChild(title);
+
+        const list = document.createElement('ul');
+        list.style.listStyle = 'none';
+        list.style.paddingLeft = '20px';
+        list.style.fontSize = '0.85rem';
+        list.style.color = 'var(--color-text-muted)';
+        list.style.lineHeight = '1.6';
+        (entry.details || []).forEach(detail => {
+            const isFailure = detail.indexOf('ล้มเหลว') !== -1 || detail.indexOf('ข้าม:') === 0;
+            const li = document.createElement('li');
+            const icon = document.createElement('i');
+            icon.className = 'fa-solid ' + (isFailure ? 'fa-xmark' : 'fa-check');
+            icon.style.color = isFailure ? 'var(--color-danger, #c55)' : 'var(--color-success)';
+            icon.style.marginRight = '6px';
+            li.appendChild(icon);
+            li.appendChild(document.createTextNode(detail));
+            list.appendChild(li);
+        });
+        card.appendChild(list);
+        logBox.appendChild(card);
+    }
+
+    async function runSync(targetId) {
+        if (isRunning) return;
+        isRunning = true;
+        shouldStop = false;
+
+        allBtn.disabled = true;
+        individualBtn.disabled = true;
+        stopBtn.style.display = 'inline-flex';
+        idleBox.style.display = 'none';
+        progressBox.style.display = 'block';
+        logBox.innerHTML = '';
+
+        let processed = 0, pubsSynced = 0, skipped = 0, errors = 0;
+        processedCountEl.textContent = '0';
+        pubsCountEl.textContent = '0';
+        skippedCountEl.textContent = '0';
+        errorCountEl.textContent = '0';
+        const collectedLogs = [];
+        let syncLogId = null;
+        let stoppedEarly = false;
+
+        statusText.textContent = 'กำลังเตรียมรายชื่อนักวิจัย...';
+
+        try {
+            const startResp = await fetch('sync_ajax.php?action=start' + (targetId ? '&id=' + encodeURIComponent(targetId) : ''), {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': SYNC_CSRF_TOKEN }
+            });
+            const startData = await startResp.json();
+            if (!startResp.ok) {
+                throw new Error(startData.error || 'ไม่สามารถเริ่มการซิงค์ได้');
+            }
+            syncLogId = startData.sync_log_id;
+            const items = startData.items || [];
+            const total = items.length;
+
+            if (total === 0) {
+                statusText.textContent = 'ไม่พบนักวิจัยที่จะซิงค์';
+            }
+
+            for (let i = 0; i < total; i++) {
+                if (shouldStop) {
+                    stoppedEarly = true;
+                    statusText.textContent = 'ผู้ใช้สั่งหยุด';
+                    break;
+                }
+                const item = items[i];
+                const current = i + 1;
+                const pct = Math.round((current / total) * 100);
+                counterText.textContent = `${current} / ${total} (${pct}%)`;
+                progressBar.style.width = pct + '%';
+                statusText.textContent = `กำลังซิงค์ (${current}/${total}): ${item.name}`;
+
+                try {
+                    const resp = await fetch('sync_ajax.php?action=process&id=' + encodeURIComponent(item.id), {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': SYNC_CSRF_TOKEN }
+                    });
+                    const res = await resp.json();
+                    if (!resp.ok) {
+                        throw new Error(res.error || 'เกิดข้อผิดพลาด');
+                    }
+
+                    processed++;
+                    pubsSynced += res.publications_synced || 0;
+                    skipped += res.records_skipped || 0;
+                    if (res.has_error) errors++;
+
+                    processedCountEl.textContent = processed;
+                    pubsCountEl.textContent = pubsSynced;
+                    skippedCountEl.textContent = skipped;
+                    errorCountEl.textContent = errors;
+
+                    collectedLogs.push({ researcher: res.researcher, details: res.details, has_error: res.has_error });
+                    addLogCard({ researcher: res.researcher, details: res.details, has_error: res.has_error });
+                } catch (err) {
+                    processed++;
+                    errors++;
+                    errorCountEl.textContent = errors;
+                    processedCountEl.textContent = processed;
+                    const entry = { researcher: item.name, details: ['เกิดข้อผิดพลาดเครือข่าย: ' + err.message], has_error: true };
+                    collectedLogs.push(entry);
+                    addLogCard(entry);
+                }
+            }
+
+            if (!stoppedEarly) {
+                statusText.textContent = 'เสร็จสิ้นเรียบร้อย';
+            }
+        } catch (e) {
+            statusText.textContent = 'เกิดข้อผิดพลาด: ' + e.message;
+        } finally {
+            if (syncLogId) {
+                try {
+                    const body = new URLSearchParams();
+                    body.set('sync_log_id', syncLogId);
+                    body.set('researchers_processed', processed);
+                    body.set('publications_synced', pubsSynced);
+                    body.set('records_skipped', skipped);
+                    body.set('error_count', errors);
+                    body.set('duplicate_count', collectedLogs.filter(l => (l.details || []).some(d => d.indexOf('ข้าม: Scopus Author ID') === 0)).length);
+                    body.set('stopped_early', stoppedEarly ? '1' : '');
+                    body.set('logs', JSON.stringify(collectedLogs));
+                    await fetch('sync_ajax.php?action=finish', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-Token': SYNC_CSRF_TOKEN, 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString()
+                    });
+                } catch (e) {
+                    // Best-effort close-out; the 30-minute stale-lock check in
+                    // open_sync_log() recovers even if this call itself fails.
+                }
+            }
+            isRunning = false;
+            stopBtn.style.display = 'none';
+            allBtn.disabled = false;
+            individualBtn.disabled = false;
+        }
+    }
+
+    allBtn.addEventListener('click', () => runSync(null));
+    individualBtn.addEventListener('click', () => {
+        const id = targetSelect.value;
+        if (!id) {
+            alert('กรุณาเลือกนักวิจัยก่อน');
+            return;
+        }
+        runSync(id);
+    });
+    stopBtn.addEventListener('click', () => { shouldStop = true; });
+
+    // admin/researchers.php links its per-row "Sync" button to
+    // sync.php?id=<researcher id> expecting an immediate sync - preserve
+    // that entry point by auto-selecting and auto-starting on load.
+    const preselectId = new URLSearchParams(window.location.search).get('id');
+    if (preselectId) {
+        targetSelect.value = preselectId;
+        runSync(preselectId);
+    }
+});
+</script>
 
 <?php
 require_once __DIR__ . '/admin_footer.php';

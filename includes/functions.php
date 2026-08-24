@@ -880,6 +880,141 @@ function add_or_update_publication($pdo, $data, $researcher_id = null) {
 }
 
 /**
+ * SYNC-04: finds Scopus Author IDs shared by more than one researcher, so
+ * callers can exclude those researchers from a sync run rather than
+ * silently attributing one person's publications to both records.
+ *
+ * @return string[] the shared scopus_author_id values (empty array on query failure)
+ */
+function find_duplicate_scopus_author_ids($pdo) {
+    try {
+        $stmt = $pdo->query("
+            SELECT `scopus_author_id`
+            FROM `researchers`
+            WHERE `scopus_author_id` IS NOT NULL AND `scopus_author_id` != ''
+            GROUP BY `scopus_author_id`
+            HAVING COUNT(*) > 1
+        ");
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) {
+        error_log("[sync] failed to check for duplicate Scopus Author IDs: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * ADMIN-03: opens a new 'running' sync_log row, rejecting the request if a
+ * genuinely in-progress sync exists (a 'running' row younger than
+ * $stale_after_minutes). An older 'running' row is treated as an
+ * abandoned/crashed sync (e.g. the PHP process was killed mid-run) and is
+ * closed out as 'failed' first, so a stuck row can't jam every future sync
+ * forever.
+ *
+ * Shared by run_synchronization() (CLI/cron/whole-batch path) and
+ * admin/sync_ajax.php's action=start (per-researcher AJAX path) so both
+ * apply the exact same mutex rule.
+ *
+ * @return array{sync_log_id: int|null, rejected: array|null} 'rejected' is
+ *   the conflicting row (with 'started_at') when a real conflict exists;
+ *   'sync_log_id' is null if the INSERT itself failed (caller should still
+ *   proceed - a sync_log write failure must never block the sync itself).
+ */
+function open_sync_log($pdo, $triggered_by, $stale_after_minutes = 30) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT id, started_at FROM `sync_log`
+            WHERE status = 'running' AND started_at > (NOW() - INTERVAL :mins MINUTE)
+            ORDER BY started_at DESC LIMIT 1
+        ");
+        $stmt->execute([':mins' => $stale_after_minutes]);
+        $already_running = $stmt->fetch();
+        if ($already_running) {
+            return ['sync_log_id' => null, 'rejected' => $already_running];
+        }
+
+        // No active lock found - any 'running' row still around is stale.
+        $pdo->exec("
+            UPDATE `sync_log` SET status = 'failed', completed_at = NOW(),
+                error_message = 'ซิงค์ครั้งก่อนไม่จบตามปกติ (อาจถูกยกเลิกกลางคัน) ระบบปิดสถานะอัตโนมัติ'
+            WHERE status = 'running'
+        ");
+    } catch (PDOException $e) {
+        // sync_log may not exist yet on a pre-migration database - don't
+        // let the mutex check itself block the sync.
+        error_log("[sync] failed to check for an in-progress sync: " . $e->getMessage());
+    }
+
+    $sync_log_id = null;
+    try {
+        $stmt = $pdo->prepare("INSERT INTO `sync_log` (status, triggered_by) VALUES ('running', ?)");
+        $stmt->execute([$triggered_by]);
+        $sync_log_id = $pdo->lastInsertId();
+    } catch (PDOException $e) {
+        error_log("[sync] failed to open sync_log row: " . $e->getMessage());
+    }
+
+    return ['sync_log_id' => $sync_log_id, 'rejected' => null];
+}
+
+/**
+ * Syncs a single researcher's Scopus publications (SYNC-01..05). Shared by
+ * run_synchronization()'s loop and admin/sync_ajax.php's action=process, so
+ * the whole-batch (CLI/cron) path and the live-progress AJAX path can never
+ * drift apart on the actual fetch/write/skip rules.
+ *
+ * @param array $r a full `researchers` row
+ * @param string[] $duplicate_scopus_ids from find_duplicate_scopus_author_ids()
+ * @return array{details: string[], has_error: bool, publications_synced: int, records_skipped: int}
+ */
+function sync_one_researcher($pdo, array $r, array $duplicate_scopus_ids) {
+    $details = [];
+    $has_error = false;
+    $publications_synced = 0;
+    $records_skipped = 0;
+
+    if (!empty($r['scopus_author_id']) && in_array($r['scopus_author_id'], $duplicate_scopus_ids, true)) {
+        $has_error = true;
+        $details[] = "ข้าม: Scopus Author ID '{$r['scopus_author_id']}' ซ้ำกับนักวิจัยรายอื่นในระบบ — ปฏิเสธการซิงค์ ต้องตรวจสอบด้วยมือก่อน";
+    } elseif (!empty($r['scopus_author_id'])) {
+        try {
+            $scopus_key = defined('SCOPUS_API_KEY') ? SCOPUS_API_KEY : null;
+            if (!$scopus_key) {
+                throw new RuntimeException('ไม่พบ SCOPUS_API_KEY ในการตั้งค่าระบบ');
+            }
+            $skipped_here = 0;
+            $pubs = fetch_scopus_publications_with_retry($r['scopus_author_id'], $scopus_key, $skipped_here);
+            $success = 0;
+            foreach ($pubs as $pub) {
+                if (add_or_update_publication($pdo, $pub, $r['id'])) {
+                    $success++;
+                }
+            }
+            $publications_synced = $success;
+            $records_skipped = $skipped_here;
+
+            $detail = "Scopus: ดึงสำเร็จ " . count($pubs) . " รายการ (บันทึก/อัปเดตแล้ว {$success} รายการ)";
+            if ($skipped_here > 0) {
+                $detail .= ", ข้าม {$skipped_here} รายการ (ไม่มี DOI หรือชื่อผู้แต่ง)";
+            }
+            $details[] = $detail;
+        } catch (Throwable $e) {
+            $has_error = true;
+            $details[] = "Scopus: ล้มเหลว - " . $e->getMessage();
+            error_log("[sync][Scopus][researcher {$r['id']}] " . $e->getMessage());
+        }
+    } else {
+        $details[] = "ไม่มี Scopus Author ID สำหรับนักวิจัยรายนี้";
+    }
+
+    return [
+        'details' => $details,
+        'has_error' => $has_error,
+        'publications_synced' => $publications_synced,
+        'records_skipped' => $records_skipped,
+    ];
+}
+
+/**
  * Explicit, admin-triggered cleanup of publications with zero researcher links.
  *
  * Deliberately NOT called automatically from any sync function — run this
