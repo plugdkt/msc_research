@@ -32,8 +32,27 @@ try {
     // clause exactly, so this number always equals what a "start" click
     // will actually process - no separate approximation to drift out of sync.
     $pubs_pending = (int)$pdo->query("SELECT COUNT(*) FROM `publications` WHERE abstract IS NOT NULL AND abstract != '' AND llm_checked_at IS NULL")->fetchColumn();
+    // Break the "checked but not classified" gap into its two real terminal
+    // states (classify_sdgs_llm.php action=process): 'skipped' fails the
+    // strict is_valid_abstract() check (under 40 chars or a placeholder
+    // document-type string), 'no_match' passed it but the model found no
+    // relevant SDG. Both set llm_checked_at without llm_sdg_primary, so
+    // pubs_classified + pubs_no_match + pubs_skipped_invalid always equals
+    // pubs_checked exactly - reuses the real validation function instead of
+    // duplicating its rules as a second, driftable SQL WHERE clause.
+    $pubs_no_match = 0;
+    $pubs_skipped_invalid = 0;
+    $stmtUnclassified = $pdo->query("SELECT abstract FROM `publications` WHERE llm_checked_at IS NOT NULL AND llm_sdg_primary IS NULL");
+    foreach ($stmtUnclassified->fetchAll(PDO::FETCH_COLUMN) as $abstract) {
+        if (is_valid_abstract($abstract)) {
+            $pubs_no_match++;
+        } else {
+            $pubs_skipped_invalid++;
+        }
+    }
 } catch (PDOException $e) {
     $total_pubs = $pubs_with_abstract = $pubs_checked = $pubs_classified = $pubs_pending = 0;
+    $pubs_no_match = $pubs_skipped_invalid = 0;
 }
 
 // Check UP AI Connect Status
@@ -85,10 +104,10 @@ $recent_samples = $stmtSample ? $stmtSample->fetchAll() : [];
     <div style="font-size: 0.8rem; color: var(--color-text-muted); background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 10px 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
         <div>
             <i class="fa-solid fa-circle-info" style="color: #60a5fa; margin-right: 6px;"></i>
-            <strong>สถานะการประมวลผล:</strong> ระบบตรวจสอบผลงานครบถ้วน 100% แล้ว (จำแนกตรงเป้าหมาย SDG <strong>525</strong> เรื่อง + AI ตรวจแล้วไม่เข้าข่าย SDG <strong>10</strong> เรื่อง + เป็นคำสั้นไม่ใช่ Abstract จริง <strong>30</strong> เรื่อง = <strong>565</strong> เรื่อง)
+            <strong>สถานะการประมวลผล:</strong> <?php echo $pubs_pending === 0 ? 'ระบบตรวจสอบผลงานครบถ้วน 100% แล้ว' : "เหลืออีก " . number_format($pubs_pending) . " เรื่องที่ยังไม่ได้ตรวจสอบ"; ?> (จำแนกตรงเป้าหมาย SDG <strong><?php echo number_format($pubs_classified); ?></strong> เรื่อง + AI ตรวจแล้วไม่เข้าข่าย SDG <strong><?php echo number_format($pubs_no_match); ?></strong> เรื่อง + เป็นคำสั้นไม่ใช่ Abstract จริง <strong><?php echo number_format($pubs_skipped_invalid); ?></strong> เรื่อง = <strong><?php echo number_format($pubs_classified + $pubs_no_match + $pubs_skipped_invalid); ?></strong> เรื่องที่ตรวจสอบแล้ว)
         </div>
-        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem; padding: 2px 8px;">
-            <i class="fa-solid fa-check-double"></i> ตรวจสอบครบ 100%
+        <span class="badge" style="background: <?php echo $pubs_pending === 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.1)'; ?>; color: <?php echo $pubs_pending === 0 ? '#10b981' : '#f87171'; ?>; border: 1px solid <?php echo $pubs_pending === 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.25)'; ?>; font-size: 0.75rem; padding: 2px 8px;">
+            <i class="fa-solid <?php echo $pubs_pending === 0 ? 'fa-check-double' : 'fa-hourglass-half'; ?>"></i> <?php echo $pubs_pending === 0 ? 'ตรวจสอบครบ 100%' : 'ยังตรวจสอบไม่ครบ'; ?>
         </span>
     </div>
 
