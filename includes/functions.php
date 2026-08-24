@@ -1634,7 +1634,19 @@ function fetch_llm_sdg_classification($title, $abstract, $model = 'gpt-5.4-mini'
 
     $content = $data['choices'][0]['message']['content'] ?? null;
     if ($content === null) {
-        throw new RuntimeException('UP AI Connect: unexpected response shape (no choices[0].message.content)');
+        // A missing content field usually means the model declined to
+        // answer (some providers return the decline text in a `refusal`
+        // field instead of `content` - confirmed pattern for OpenAI-style
+        // APIs) rather than a transport failure. Surface whatever
+        // diagnostic is available instead of a bare "unexpected shape"
+        // message, so a recurrence is actually debuggable from the batch
+        // tool's error log without needing to reproduce it live.
+        $refusal = $data['choices'][0]['message']['refusal'] ?? null;
+        $finish_reason = $data['choices'][0]['finish_reason'] ?? 'unknown';
+        $detail = $refusal
+            ? "model refused: {$refusal}"
+            : "finish_reason={$finish_reason}, raw=" . substr(json_encode($data), 0, 300);
+        throw new RuntimeException("UP AI Connect ({$model}): unexpected response shape - {$detail}");
     }
 
     // Defensive: strip markdown fences if the model adds them despite the
@@ -1703,6 +1715,16 @@ function fetch_llm_sdg_classification_with_retry($title, $abstract, $model = nul
                 error_log("[upai][sdg] timeout/connection error on {$current_model}, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
                 sleep($wait);
                 $last_exception = $e;
+            } catch (RuntimeException $e) {
+                // Malformed/unusable response (bad JSON, missing content,
+                // a model refusal) - confirmed live 2026-08-21 on a real
+                // publication. Not worth retrying the SAME model (this
+                // isn't a transient network issue), but this can be a
+                // per-model quirk, so move to the next model once rather
+                // than failing the whole publication immediately.
+                error_log("[upai][sdg] {$current_model} returned an unusable response, trying next model: " . $e->getMessage());
+                $last_exception = $e;
+                break;
             }
         }
     }
@@ -1774,7 +1796,19 @@ function fetch_llm_expert_ranking($query, array $candidates, $model = 'gpt-5.4-m
 
     $content = $data['choices'][0]['message']['content'] ?? null;
     if ($content === null) {
-        throw new RuntimeException('UP AI Connect: unexpected response shape (no choices[0].message.content)');
+        // A missing content field usually means the model declined to
+        // answer (some providers return the decline text in a `refusal`
+        // field instead of `content` - confirmed pattern for OpenAI-style
+        // APIs) rather than a transport failure. Surface whatever
+        // diagnostic is available instead of a bare "unexpected shape"
+        // message, so a recurrence is actually debuggable from the batch
+        // tool's error log without needing to reproduce it live.
+        $refusal = $data['choices'][0]['message']['refusal'] ?? null;
+        $finish_reason = $data['choices'][0]['finish_reason'] ?? 'unknown';
+        $detail = $refusal
+            ? "model refused: {$refusal}"
+            : "finish_reason={$finish_reason}, raw=" . substr(json_encode($data), 0, 300);
+        throw new RuntimeException("UP AI Connect ({$model}): unexpected response shape - {$detail}");
     }
     $content = trim($content);
     $content = preg_replace('/^```(?:json)?\s*/i', '', $content);
@@ -1837,6 +1871,10 @@ function fetch_llm_expert_ranking_with_retry($query, array $candidates, $model =
                 error_log("[upai][expert_finder] timeout/connection error on {$current_model}, waiting {$wait}s before retry " . ($attempt + 1) . "/3");
                 sleep($wait);
                 $last_exception = $e;
+            } catch (RuntimeException $e) {
+                error_log("[upai][expert_finder] {$current_model} returned an unusable response, trying next model: " . $e->getMessage());
+                $last_exception = $e;
+                break;
             }
         }
     }
