@@ -97,6 +97,35 @@ $page_title = 'ซิงค์ข้อมูลผ่าน API - Admin Panel';
 
 require_once __DIR__ . '/admin_header.php';
 
+// --- Sync history report (persistent summary, unlike the log panel on the
+// right which only fills in right after a trigger on this same request) ---
+$sync_stats = null;
+$recent_sync_runs = [];
+try {
+    $sync_stats = $pdo->query("
+        SELECT
+            COUNT(*) AS total_runs,
+            SUM(status = 'success') AS success_runs,
+            SUM(status = 'partial') AS partial_runs,
+            SUM(status = 'failed') AS failed_runs,
+            SUM(publications_synced) AS total_pubs_synced,
+            SUM(records_skipped) AS total_skipped,
+            AVG(CASE WHEN completed_at IS NOT NULL THEN TIMESTAMPDIFF(SECOND, started_at, completed_at) END) AS avg_duration_seconds,
+            MAX(started_at) AS last_run_at
+        FROM `sync_log`
+    ")->fetch();
+
+    $recent_sync_runs = $pdo->query("
+        SELECT id, started_at, completed_at, status, triggered_by,
+               researchers_processed, publications_synced, records_skipped
+        FROM `sync_log`
+        ORDER BY started_at DESC
+        LIMIT 10
+    ")->fetchAll();
+} catch (PDOException $e) {
+    error_log("[sync] failed to load sync_log summary report: " . $e->getMessage());
+}
+
 // Get list of all researchers for the dropdown menu
 $all_researchers_list = [];
 try {
@@ -367,6 +396,80 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
 <div class="hero glass-panel animate-fade-in" style="padding: 30px 20px; margin-bottom: 30px;">
     <h2>ซิงค์ข้อมูลผ่าน API อัตโนมัติ</h2>
     <p>ระบบจะเรียกใช้งานบริการ API ภายนอกเพื่อดาวน์โหลดผลงานล่าสุดและดัชนีการอ้างอิงของนักวิจัยแต่ละท่านเข้ามายังระบบฐานข้อมูลหลังบ้านโดยอัตโนมัติ</p>
+</div>
+
+<!-- Sync history report: always visible, independent of whether a sync was just triggered on this request -->
+<div class="glass-panel animate-fade-in" style="padding: 25px; margin-bottom: 30px;">
+    <h3 style="margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
+        <i class="fa-solid fa-chart-line" style="color: var(--color-accent);"></i> รายงานสถิติการซิงค์ทั้งหมด
+    </h3>
+
+    <?php if ($sync_stats && (int)$sync_stats['total_runs'] > 0): ?>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ซิงค์ทั้งหมด</div>
+                <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($sync_stats['total_runs']); ?></div>
+            </div>
+            <div style="background: rgba(46, 160, 67, 0.08); border: 1px solid rgba(46, 160, 67, 0.3); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">สำเร็จ</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: var(--color-success); font-family: var(--font-eng);"><?php echo number_format($sync_stats['success_runs']); ?></div>
+            </div>
+            <div style="background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.3); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">สำเร็จบางส่วน</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #eab308; font-family: var(--font-eng);"><?php echo number_format($sync_stats['partial_runs']); ?></div>
+            </div>
+            <div style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ล้มเหลว</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #f87171; font-family: var(--font-eng);"><?php echo number_format($sync_stats['failed_runs']); ?></div>
+            </div>
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่ซิงค์สะสม</div>
+                <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($sync_stats['total_pubs_synced']); ?></div>
+            </div>
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ข้ามสะสม (ไม่มี DOI/ผู้แต่ง)</div>
+                <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($sync_stats['total_skipped']); ?></div>
+            </div>
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">เวลาเฉลี่ยต่อครั้ง</div>
+                <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo $sync_stats['avg_duration_seconds'] !== null ? number_format((float)$sync_stats['avg_duration_seconds']) . ' วิ' : '-'; ?></div>
+            </div>
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ซิงค์ล่าสุดเมื่อ</div>
+                <div style="font-size: 1rem; font-weight: 700; font-family: var(--font-eng);"><?php echo $sync_stats['last_run_at'] ? format_thai_datetime($sync_stats['last_run_at']) : '-'; ?></div>
+            </div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--border-glass); color: var(--color-text-muted);">
+                    <th style="padding: 10px 8px;">เริ่มเมื่อ</th>
+                    <th style="padding: 10px 8px;">สถานะ</th>
+                    <th style="padding: 10px 8px;">ผู้สั่ง</th>
+                    <th style="padding: 10px 8px; text-align: right;">นักวิจัย</th>
+                    <th style="padding: 10px 8px; text-align: right;">ผลงานที่ซิงค์</th>
+                    <th style="padding: 10px 8px; text-align: right;">ข้าม</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($recent_sync_runs as $run):
+                    $status_color = ['success' => 'var(--color-success)', 'partial' => '#eab308', 'failed' => '#f87171', 'running' => '#60a5fa'][$run['status']] ?? 'var(--color-text-muted)';
+                    $status_label = ['success' => 'สำเร็จ', 'partial' => 'สำเร็จบางส่วน', 'failed' => 'ล้มเหลว', 'running' => 'กำลังทำงาน'][$run['status']] ?? htmlspecialchars($run['status']);
+                ?>
+                    <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                        <td style="padding: 10px 8px;"><?php echo format_thai_datetime($run['started_at']); ?></td>
+                        <td style="padding: 10px 8px; color: <?php echo $status_color; ?>; font-weight: 600;"><?php echo $status_label; ?></td>
+                        <td style="padding: 10px 8px; color: var(--color-text-muted);"><?php echo htmlspecialchars($run['triggered_by'] ?? '-'); ?></td>
+                        <td style="padding: 10px 8px; text-align: right;"><?php echo number_format($run['researchers_processed']); ?></td>
+                        <td style="padding: 10px 8px; text-align: right;"><?php echo number_format($run['publications_synced']); ?></td>
+                        <td style="padding: 10px 8px; text-align: right;"><?php echo number_format($run['records_skipped']); ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php else: ?>
+        <p style="color: var(--color-text-muted); text-align: center; padding: 20px;">ยังไม่มีประวัติการซิงค์ในระบบ</p>
+    <?php endif; ?>
 </div>
 
 <div class="main-grid" style="grid-template-columns: 320px 1fr;">
