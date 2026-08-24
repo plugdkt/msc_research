@@ -297,9 +297,13 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
 
 <!-- Sync history report: always visible, independent of whether a sync was just triggered on this request -->
 <div class="glass-panel animate-fade-in" style="padding: 25px; margin-bottom: 30px;">
-    <h3 style="margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
+    <h3 style="margin-bottom: 8px; font-weight: 600; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
         <i class="fa-solid fa-chart-line" style="color: var(--color-accent);"></i> รายงานสถิติการซิงค์ทั้งหมด
     </h3>
+    <p style="font-size: 0.78rem; color: var(--color-text-muted); margin: 0 0 20px 0; line-height: 1.5;">
+        <i class="fa-solid fa-circle-info" style="color: #60a5fa; margin-right: 4px;"></i>
+        "ครั้งที่บันทึก/อัปเดตผลงาน" นับทุกครั้งที่ระบบเขียนข้อมูลสำเร็จต่อนักวิจัย 1 คน — ผลงานที่มีผู้แต่งร่วมหลายคนในคณะจะถูกนับซ้ำตามจำนวนนักวิจัยที่ผูกกับผลงานนั้น จึงมักมากกว่าจำนวนผลงานที่ต่างกันจริงในระบบ (ดูจำนวนผลงานจริงที่หน้า Dashboard หรือ "จัดการผลงานตีพิมพ์")
+    </p>
 
     <?php if ($sync_stats && (int)$sync_stats['total_runs'] > 0): ?>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px;">
@@ -320,7 +324,7 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
                 <div style="font-size: 1.5rem; font-weight: 700; color: #f87171; font-family: var(--font-eng);"><?php echo number_format($sync_stats['failed_runs']); ?></div>
             </div>
             <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
-                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่ซิงค์สะสม</div>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">ครั้งที่บันทึก/อัปเดตผลงาน (สะสม)</div>
                 <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($sync_stats['total_pubs_synced']); ?></div>
             </div>
             <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
@@ -344,7 +348,7 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
                     <th style="padding: 10px 8px;">สถานะ</th>
                     <th style="padding: 10px 8px;">ผู้สั่ง</th>
                     <th style="padding: 10px 8px; text-align: right;">นักวิจัย</th>
-                    <th style="padding: 10px 8px; text-align: right;">ผลงานที่ซิงค์</th>
+                    <th style="padding: 10px 8px; text-align: right;">ครั้งที่บันทึก/อัปเดต</th>
                     <th style="padding: 10px 8px; text-align: right;">ข้าม</th>
                 </tr>
             </thead>
@@ -491,7 +495,7 @@ function run_synchronization($pdo, $quiet = false, $target_researcher_id = null,
 
             <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 12px 15px; margin: 15px 0; font-size: 0.85rem; display: flex; gap: 20px; flex-wrap: wrap;">
                 <span>นักวิจัยที่ประมวลผล: <strong id="sync-processed-count">0</strong></span>
-                <span>ผลงานที่บันทึก/อัปเดต: <strong id="sync-pubs-count">0</strong></span>
+                <span>ครั้งที่บันทึก/อัปเดต: <strong id="sync-pubs-count">0</strong></span>
                 <span>ข้าม (ไม่มี DOI/ผู้แต่ง): <strong id="sync-skipped-count">0</strong></span>
                 <span style="color: #f87171;">ผิดพลาด/ปฏิเสธ: <strong id="sync-error-count">0</strong></span>
             </div>
