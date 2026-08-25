@@ -142,13 +142,60 @@ if (isset($_POST['save_researcher'])) {
     $department = trim($_POST['department']);
     $email = !empty($_POST['email']) ? trim($_POST['email']) : null;
     $avatar_url = !empty($_POST['avatar_url']) ? trim($_POST['avatar_url']) : null;
+    $remove_avatar = isset($_POST['remove_avatar']) && $_POST['remove_avatar'] == '1';
+
+    // Handle avatar photo upload
+    if (isset($_FILES['avatar_file']) && $_FILES['avatar_file']['error'] === UPLOAD_ERR_OK) {
+        $file_tmp = $_FILES['avatar_file']['tmp_name'];
+        $file_size = $_FILES['avatar_file']['size'];
+        
+        if ($file_size > 5 * 1024 * 1024) {
+            $message = "ไฟล์รูปภาพมีขนาดใหญ่เกินไป (จำกัดไม่เกิน 5 MB)";
+            $message_type = "error";
+        } else {
+            $image_info = @getimagesize($file_tmp);
+            if ($image_info === false) {
+                $message = "ไฟล์ที่อัปโหลดไม่ใช่รูปภาพที่ถูกต้อง";
+                $message_type = "error";
+            } else {
+                $allowed_types = [
+                    IMAGETYPE_JPEG => 'jpg',
+                    IMAGETYPE_PNG => 'png',
+                    IMAGETYPE_WEBP => 'webp',
+                    IMAGETYPE_GIF => 'gif'
+                ];
+                $img_type = $image_info[2];
+                if (!isset($allowed_types[$img_type])) {
+                    $message = "รองรับเฉพาะไฟล์รูปภาพประเภท JPG, PNG, WEBP หรือ GIF เท่านั้น";
+                    $message_type = "error";
+                } else {
+                    $ext = $allowed_types[$img_type];
+                    $target_dir = __DIR__ . '/../uploads/avatars/';
+                    if (!is_dir($target_dir)) {
+                        mkdir($target_dir, 0777, true);
+                    }
+                    $unique_name = 'avatar_' . ($researcher_id ?: 'new') . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                    $target_path = $target_dir . $unique_name;
+                    
+                    if (move_uploaded_file($file_tmp, $target_path)) {
+                        $avatar_url = 'uploads/avatars/' . $unique_name;
+                    } else {
+                        $message = "ไม่สามารถบันทึกไฟล์รูปภาพลงเซิร์ฟเวอร์ได้";
+                        $message_type = "error";
+                    }
+                }
+            }
+        }
+    } elseif ($remove_avatar) {
+        $avatar_url = null;
+    }
     $researcher_type = !empty($_POST['researcher_type']) ? trim($_POST['researcher_type']) : 'สายวิชาการ';
     $is_active = isset($_POST['is_active']) ? 1 : 0;
 
     if (empty($first_name_th) || empty($last_name_th) || empty($first_name_en) || empty($last_name_en) || empty($department)) {
         $message = "กรุณากรอกฟิลด์บังคับให้ครบถ้วน (ชื่อ, นามสกุล และ ภาควิชา)";
         $message_type = "error";
-    } else {
+    } elseif (empty($message_type) || $message_type !== "error") {
         try {
             // Clean/Sanitize IDs before saving
             if ($orcid_id) {
@@ -512,13 +559,26 @@ require_once __DIR__ . '/admin_header.php';
                     <?php foreach ($researchers as $r): ?>
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.01)'" onmouseout="this.style.background='none'">
                             <td style="padding: 12px 8px; font-weight: 500;">
-                                <div style="color: var(--color-text-main); display: flex; align-items: center; gap: 6px;">
-                                    <?php echo htmlspecialchars(($r['title_th'] ?? '') . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']); ?>
-                                    <?php if (empty($r['is_active'])): ?>
-                                        <span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); font-size: 0.65rem; font-weight: 600;">พ้นสภาพ</span>
-                                    <?php endif; ?>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
+                                        <?php if (!empty($r['avatar_url'])): ?>
+                                            <?php $avatar_src = preg_match('~^https?://~i', $r['avatar_url']) ? $r['avatar_url'] : '../' . ltrim($r['avatar_url'], '/'); ?>
+                                            <img src="<?php echo htmlspecialchars($avatar_src); ?>" alt="avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                            <i class="fa-solid fa-user-tie" style="display: none; color: var(--color-text-muted); font-size: 1rem;"></i>
+                                        <?php else: ?>
+                                            <i class="fa-solid fa-user-tie" style="color: var(--color-text-muted); font-size: 1rem;"></i>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div>
+                                        <div style="color: var(--color-text-main); display: flex; align-items: center; gap: 6px;">
+                                            <?php echo htmlspecialchars(($r['title_th'] ?? '') . ' ' . $r['first_name_th'] . ' ' . $r['last_name_th']); ?>
+                                            <?php if (empty($r['is_active'])): ?>
+                                                <span class="badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); font-size: 0.65rem; font-weight: 600;">พ้นสภาพ</span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-eng);"><?php echo htmlspecialchars(($r['title_en'] ?? '') . ' ' . $r['first_name_en'] . ' ' . $r['last_name_en']); ?></div>
+                                    </div>
                                 </div>
-                                <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-eng);"><?php echo htmlspecialchars(($r['title_en'] ?? '') . ' ' . $r['first_name_en'] . ' ' . $r['last_name_en']); ?></div>
                             </td>
                             <td style="padding: 12px 8px;">
                                 <?php if ($r['researcher_type'] === 'สายสนับสนุน'): ?>
@@ -591,11 +651,42 @@ require_once __DIR__ . '/admin_header.php';
             <?php echo $edit_mode ? 'แก้ไขข้อมูลนักวิจัย' : 'ลงทะเบียนนักวิจัยใหม่'; ?>
         </h3>
 
-        <form method="POST" action="researchers.php<?php echo $filter_suffix; ?>" style="display: flex; flex-direction: column; gap: 9px;">
+        <form method="POST" action="researchers.php<?php echo $filter_suffix; ?>" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 9px;">
             <input type="hidden" name="researcher_id" value="<?php echo htmlspecialchars($edit_r['id'] ?? ''); ?>">
             <input type="hidden" name="_filter_search" value="<?php echo htmlspecialchars($filter_search); ?>">
             <input type="hidden" name="_filter_dept"   value="<?php echo htmlspecialchars($filter_dept); ?>">
             <input type="hidden" name="_filter_type"   value="<?php echo htmlspecialchars($filter_type); ?>">
+            <input type="hidden" name="avatar_url" value="<?php echo htmlspecialchars($edit_r['avatar_url'] ?? ''); ?>">
+
+            <!-- รูปถ่ายนักวิจัย (Photo / Avatar) -->
+            <div style="display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 10px; padding: 10px 14px;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 2px solid var(--color-primary); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative;">
+                    <?php 
+                    $current_avatar = '';
+                    if (!empty($edit_r['avatar_url'])) {
+                        $current_avatar = preg_match('~^https?://~i', $edit_r['avatar_url']) ? $edit_r['avatar_url'] : '../' . ltrim($edit_r['avatar_url'], '/');
+                    }
+                    ?>
+                    <img id="avatar-preview" src="<?php echo htmlspecialchars($current_avatar); ?>" alt="avatar" style="width: 100%; height: 100%; object-fit: cover; <?php echo empty($current_avatar) ? 'display: none;' : ''; ?>">
+                    <i id="avatar-placeholder" class="fa-solid fa-user-tie" style="font-size: 1.8rem; color: var(--color-text-muted); <?php echo !empty($current_avatar) ? 'display: none;' : ''; ?>"></i>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.76rem; font-weight: 600; color: var(--color-text-main); display: block; margin-bottom: 4px;">
+                        <i class="fa-solid fa-camera" style="color: var(--color-primary); margin-right: 4px;"></i> รูปถ่ายนักวิจัย (Photo / Avatar)
+                    </label>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <input type="file" name="avatar_file" id="avatar_file" accept="image/png, image/jpeg, image/webp, image/gif" style="font-size: 0.78rem; color: var(--color-text-muted); cursor: pointer;">
+                        <?php if (!empty($edit_r['avatar_url'])): ?>
+                            <label style="font-size: 0.72rem; color: #f87171; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; padding: 2px 7px;">
+                                <input type="checkbox" name="remove_avatar" value="1" id="remove_avatar_cb" style="accent-color: #ef4444; cursor: pointer;"> ลบรูปภาพปัจจุบัน
+                            </label>
+                        <?php endif; ?>
+                    </div>
+                    <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 3px;">
+                        รองรับไฟล์ JPG, PNG, WEBP, GIF (ขนาดไฟล์ไม่เกิน 5 MB)
+                    </div>
+                </div>
+            </div>
 
             <!-- ชื่อ TH: คำนำหน้า + ชื่อ + นามสกุล -->
             <div style="display: grid; grid-template-columns: 80px 1fr 1fr; gap: 8px;">
@@ -735,6 +826,50 @@ require_once __DIR__ . '/admin_header.php';
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') window.location.href = 'researchers.php';
     });
+
+    const avatarInput = document.getElementById('avatar_file');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const avatarPlaceholder = document.getElementById('avatar-placeholder');
+    const removeAvatarCb = document.getElementById('remove_avatar_cb');
+
+    if (avatarInput) {
+        avatarInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const objectUrl = URL.createObjectURL(file);
+                if (avatarPreview) {
+                    avatarPreview.src = objectUrl;
+                    avatarPreview.style.display = 'block';
+                }
+                if (avatarPlaceholder) {
+                    avatarPlaceholder.style.display = 'none';
+                }
+                if (removeAvatarCb) {
+                    removeAvatarCb.checked = false;
+                }
+            }
+        });
+    }
+
+    if (removeAvatarCb) {
+        removeAvatarCb.addEventListener('change', function() {
+            if (this.checked) {
+                if (avatarPreview) avatarPreview.style.display = 'none';
+                if (avatarPlaceholder) avatarPlaceholder.style.display = 'block';
+                if (avatarInput) avatarInput.value = '';
+            } else {
+                <?php if (!empty($current_avatar)): ?>
+                    if (avatarPreview) {
+                        avatarPreview.src = '<?php echo htmlspecialchars($current_avatar); ?>';
+                        avatarPreview.style.display = 'block';
+                    }
+                    if (avatarPlaceholder) {
+                        avatarPlaceholder.style.display = 'none';
+                    }
+                <?php endif; ?>
+            }
+        });
+    }
 </script>
 
 <?php
