@@ -264,6 +264,98 @@ if (isset($_POST['save_researcher'])) {
 }
 
 
+// Handle HR System Photo Sync (hr_v2 / hr_db)
+if (isset($_GET['sync_hr_photos'])) {
+    try {
+        $hr_pdo = new PDO("mysql:host=localhost;dbname=hr_db;charset=utf8mb4", "root", "49282490");
+        $all_res = $pdo->query("SELECT id, title_th, first_name_th, last_name_th, title_en, first_name_en, last_name_en, email, avatar_url FROM researchers")->fetchAll(PDO::FETCH_ASSOC);
+        
+        $hr_users = $hr_pdo->query("
+            SELECT u.id_user, u.name_user, u.name_user_en, u.email, img.name_img
+            FROM user u
+            LEFT JOIN (
+                SELECT id_user, name_img, MAX(id_img_user) as max_id
+                FROM img_user
+                GROUP BY id_user
+            ) img ON u.id_user = img.id_user
+            WHERE img.name_img IS NOT NULL AND img.name_img != ''
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $hr_src_dir = dirname(dirname(__DIR__)) . DIRECTORY_SEPARATOR . 'hr_medsci' . DIRECTORY_SEPARATOR . 'img' . DIRECTORY_SEPARATOR . 'staff' . DIRECTORY_SEPARATOR;
+        if (!is_dir($hr_src_dir)) {
+            $hr_src_dir = 'c:/inetpub/wwwroot/hr_medsci/img/staff/';
+        }
+
+        $dest_dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatars' . DIRECTORY_SEPARATOR;
+        if (!is_dir($dest_dir)) {
+            @mkdir($dest_dir, 0777, true);
+        }
+
+        $synced = 0;
+        foreach ($all_res as $r) {
+            $match = null;
+            // 1. Email match
+            if (!empty($r['email'])) {
+                foreach ($hr_users as $hu) {
+                    if (!empty($hu['email']) && strtolower(trim($r['email'])) === strtolower(trim($hu['email']))) {
+                        $match = $hu;
+                        break;
+                    }
+                }
+            }
+            // 2. Thai Name match
+            if (!$match && !empty($r['first_name_th']) && !empty($r['last_name_th'])) {
+                $r_th = preg_replace('/\s+/', '', $r['first_name_th'] . $r['last_name_th']);
+                foreach ($hr_users as $hu) {
+                    $hu_th = preg_replace('/\s+/', '', $hu['name_user']);
+                    if (strpos($hu_th, $r_th) !== false || (strpos($hu_th, $r['first_name_th']) !== false && strpos($hu_th, $r['last_name_th']) !== false)) {
+                        $match = $hu;
+                        break;
+                    }
+                }
+            }
+            // 3. English Name match
+            if (!$match && !empty($r['first_name_en']) && !empty($r['last_name_en'])) {
+                $r_en_fn = strtolower(trim($r['first_name_en']));
+                $r_en_ln = strtolower(trim($r['last_name_en']));
+                foreach ($hr_users as $hu) {
+                    $hu_en = strtolower(trim($hu['name_user_en'] ?? ''));
+                    if (strpos($hu_en, $r_en_fn) !== false && strpos($hu_en, $r_en_ln) !== false) {
+                        $match = $hu;
+                        break;
+                    }
+                }
+            }
+
+            if ($match) {
+                $src_file = $hr_src_dir . $match['name_img'];
+                if (file_exists($src_file) && is_file($src_file)) {
+                    $ext = pathinfo($match['name_img'], PATHINFO_EXTENSION);
+                    if (empty($ext) || $ext === 'jpg') $ext = 'jpg';
+                    $dest_filename = 'avatar_' . $r['id'] . '_hr.' . strtolower($ext);
+                    $dest_path = $dest_dir . $dest_filename;
+                    
+                    if (copy($src_file, $dest_path)) {
+                        $new_avatar_url = 'uploads/avatars/' . $dest_filename;
+                        $stmt = $pdo->prepare("UPDATE `researchers` SET `avatar_url` = ? WHERE `id` = ?");
+                        $stmt->execute([$new_avatar_url, $r['id']]);
+                        $synced++;
+                    }
+                }
+            }
+        }
+
+        $_SESSION['admin_message'] = "ซิงค์รูปภาพจากระบบ HR (hr_v2) สำเร็จทั้งหมด {$synced} ท่านเรียบร้อยแล้ว";
+        $_SESSION['admin_message_type'] = "success";
+    } catch (Exception $e) {
+        $_SESSION['admin_message'] = "ไม่สามารถเชื่อมต่อฐานข้อมูลระบบ HR ได้: " . $e->getMessage();
+        $_SESSION['admin_message_type'] = "error";
+    }
+
+    header("Location: researchers.php" . $filter_suffix);
+    exit;
+}
+
 // Handle CSV import
 $import_result = null;
 if (isset($_POST['import_csv']) && isset($_FILES['csv_file']) && $_FILES['csv_file']['error'] === UPLOAD_ERR_OK) {
@@ -486,10 +578,13 @@ require_once __DIR__ . '/admin_header.php';
             <span style="font-size: 0.8rem; font-weight: 400; color: var(--color-text-muted); margin-left: 10px;"><?php echo count($researchers); ?> ราย</span>
         </h3>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <a href="researchers.php?import=1" class="btn-premium" style="padding: 10px 20px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-color: rgba(16,185,129,0.4);">
+            <a href="researchers.php?sync_hr_photos=1<?php echo $filter_qs ? '&' . $filter_qs : ''; ?>" onclick="return confirm('ต้องการดึงและซิงค์รูปภาพของนักวิจัยจากระบบ HR (hr_v2) อัตโนมัติหรือไม่?')" class="btn-premium" style="padding: 10px 18px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; background: linear-gradient(135deg, #0284c7, #0369a1); border-color: rgba(2,132,199,0.4);" title="ดึงรูปภาพของบุคลากรจากฐานข้อมูลระบบ HR MedSci อัตโนมัติ">
+                <i class="fa-solid fa-arrows-rotate animate-hover-spin"></i> ซิงค์รูปจากระบบ HR
+            </a>
+            <a href="researchers.php?import=1<?php echo $filter_qs ? '&' . $filter_qs : ''; ?>" class="btn-premium" style="padding: 10px 18px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-color: rgba(16,185,129,0.4);">
                 <i class="fa-solid fa-file-csv"></i> Import CSV
             </a>
-            <a href="researchers.php?add_new=1" class="btn-premium" style="padding: 10px 20px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
+            <a href="researchers.php?add_new=1<?php echo $filter_qs ? '&' . $filter_qs : ''; ?>" class="btn-premium" style="padding: 10px 18px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
                 <i class="fa-solid fa-user-plus"></i> ลงทะเบียนนักวิจัยใหม่
             </a>
         </div>
