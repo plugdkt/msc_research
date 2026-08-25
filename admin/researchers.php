@@ -567,10 +567,10 @@ require_once __DIR__ . '/admin_header.php';
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.01)'" onmouseout="this.style.background='none'">
                             <td style="padding: 12px 8px; font-weight: 500;">
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
+                                    <div style="width: 38px; height: 50px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
                                         <?php if (!empty($r['avatar_url'])): ?>
                                             <?php $avatar_src = preg_match('~^https?://~i', $r['avatar_url']) ? $r['avatar_url'] : '../' . ltrim($r['avatar_url'], '/'); ?>
-                                            <img src="<?php echo htmlspecialchars($avatar_src); ?>" alt="avatar" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                            <img src="<?php echo htmlspecialchars($avatar_src); ?>" alt="avatar" style="width: 100%; height: 100%; object-fit: cover; object-position: top center;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                                             <i class="fa-solid fa-user-tie" style="display: none; color: var(--color-text-muted); font-size: 1rem;"></i>
                                         <?php else: ?>
                                             <i class="fa-solid fa-user-tie" style="color: var(--color-text-muted); font-size: 1rem;"></i>
@@ -667,14 +667,14 @@ require_once __DIR__ . '/admin_header.php';
 
             <!-- รูปถ่ายนักวิจัย (Photo / Avatar) -->
             <div style="display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 10px; padding: 10px 14px;">
-                <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 2px solid var(--color-primary); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative;">
+                <div style="width: 65px; height: 86px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 2px solid var(--color-primary); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative;">
                     <?php 
                     $current_avatar = '';
                     if (!empty($edit_r['avatar_url'])) {
                         $current_avatar = preg_match('~^https?://~i', $edit_r['avatar_url']) ? $edit_r['avatar_url'] : '../' . ltrim($edit_r['avatar_url'], '/');
                     }
                     ?>
-                    <img id="avatar-preview" src="<?php echo htmlspecialchars($current_avatar); ?>" alt="avatar" style="width: 100%; height: 100%; object-fit: cover; <?php echo empty($current_avatar) ? 'display: none;' : ''; ?>">
+                    <img id="avatar-preview" src="<?php echo htmlspecialchars($current_avatar); ?>" alt="avatar" style="width: 100%; height: 100%; object-fit: cover; object-position: top center; <?php echo empty($current_avatar) ? 'display: none;' : ''; ?>">
                     <i id="avatar-placeholder" class="fa-solid fa-user-tie" style="font-size: 1.8rem; color: var(--color-text-muted); <?php echo !empty($current_avatar) ? 'display: none;' : ''; ?>"></i>
                 </div>
                 <div style="flex: 1;">

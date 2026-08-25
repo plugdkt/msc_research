@@ -145,7 +145,7 @@ include_once __DIR__ . '/includes/header.php';
 <div class="glass-panel animate-fade-in" style="padding: 35px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; flex-wrap: wrap;">
     <!-- Left Section: Avatar + Details -->
     <div style="display: flex; gap: 25px; align-items: flex-start; flex: 1; min-width: 320px;">
-        <div class="researcher-avatar" style="width: 130px; height: 130px; font-size: 3.5rem; border-width: 4px; flex-shrink: 0;">
+        <div class="researcher-avatar" style="width: 125px; height: 165px; border-radius: 12px; font-size: 3.5rem; border: 2px solid var(--border-glass); flex-shrink: 0; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
             <?php if (!empty($researcher['avatar_url'])): ?>
                 <img src="<?php echo htmlspecialchars($researcher['avatar_url']); ?>" alt="avatar">
             <?php else: ?>
