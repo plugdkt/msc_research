@@ -16,8 +16,8 @@ $total_citations = get_total_citations($pdo);
 $stmtInterCollabs = $pdo->query("SELECT COUNT(*) FROM `publications` WHERE countries IS NOT NULL AND TRIM(countries) != '' AND TRIM(REPLACE(REPLACE(countries, 'Thailand', ''), ',', '')) != ''");
 $international_collabs_count = $stmtInterCollabs->fetchColumn() ?: 0;
 
-// Fetch RCR (Relative Citation Ratio) statistics from NIH iCite
-$stmtRCR = $pdo->query("SELECT AVG(rcr) as avg_val, COUNT(rcr) as count_val FROM `publications` WHERE rcr IS NOT NULL AND rcr != ''");
+// Fetch RCR (Relative Citation Ratio) statistics from NIH iCite (matches reports.php)
+$stmtRCR = $pdo->query("SELECT AVG(rcr) as avg_val, COUNT(rcr) as count_val FROM `publications` WHERE rcr IS NOT NULL");
 $rcr_row = $stmtRCR->fetch();
 $avg_rcr = ($rcr_row && $rcr_row['avg_val'] !== null) ? (float)$rcr_row['avg_val'] : null;
 $rcr_covered_count = ($rcr_row && $rcr_row['count_val'] !== null) ? (int)$rcr_row['count_val'] : 0;
