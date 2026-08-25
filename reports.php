@@ -580,6 +580,8 @@ foreach ($filtered_publications as $pub) {
     }
 }
 $rcr_covered_count = count($rcr_values);
+$rcr_total_pubs = count($filtered_publications);
+$rcr_coverage_pct = $rcr_total_pubs > 0 ? ($rcr_covered_count / $rcr_total_pubs) * 100 : 0;
 $rcr_average = $rcr_covered_count > 0 ? array_sum($rcr_values) / $rcr_covered_count : null;
 
 $rcr_top_publications = array_filter($filtered_publications, function ($p) {
@@ -827,14 +829,21 @@ include_once __DIR__ . '/includes/header.php';
         <?php if ($rcr_covered_count === 0): ?>
             <p style="font-size: 0.85rem; color: var(--color-text-muted);">ยังไม่มีข้อมูล RCR ในตัวกรองปัจจุบัน — ผู้ดูแลระบบยังไม่ได้ดึงข้อมูล หรือผลงานในขอบเขตนี้ไม่มีค่า RCR</p>
         <?php else: ?>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
                     <div style="font-size: 0.75rem; color: var(--color-text-muted);">RCR เฉลี่ย</div>
                     <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng); color: #10b981;"><?php echo number_format($rcr_average, 2); ?></div>
+                    <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 4px;">เกณฑ์มาตรฐานโลก = 1.0</div>
                 </div>
                 <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); padding: 14px; border-radius: 10px; text-align: center;">
                     <div style="font-size: 0.75rem; color: var(--color-text-muted);">ผลงานที่มีค่า RCR</div>
-                    <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($rcr_covered_count); ?> / <?php echo number_format(count($filtered_publications)); ?></div>
+                    <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng);"><?php echo number_format($rcr_covered_count); ?> <span style="font-size: 0.9rem; font-weight: 400; color: var(--color-text-muted);">/ <?php echo number_format($rcr_total_pubs); ?></span></div>
+                    <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 4px;">คิดเป็น <?php echo number_format($rcr_coverage_pct, 1); ?>% ของผลงานทั้งหมด</div>
+                </div>
+                <div style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); padding: 14px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: var(--color-text-muted);">RCR Coverage</div>
+                    <div style="font-size: 1.5rem; font-weight: 700; font-family: var(--font-eng); color: #38bdf8;"><?php echo number_format($rcr_coverage_pct, 1); ?>%</div>
+                    <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 4px;">ความครอบคลุมในฐาน NIH iCite</div>
                 </div>
             </div>
             <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
