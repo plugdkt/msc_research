@@ -170,17 +170,24 @@ if (isset($_POST['save_researcher'])) {
                     $message_type = "error";
                 } else {
                     $ext = $allowed_types[$img_type];
-                    $target_dir = __DIR__ . '/../uploads/avatars/';
+                    $target_dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatars' . DIRECTORY_SEPARATOR;
                     if (!is_dir($target_dir)) {
-                        mkdir($target_dir, 0777, true);
+                        @mkdir($target_dir, 0777, true);
                     }
                     $unique_name = 'avatar_' . ($researcher_id ?: 'new') . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
                     $target_path = $target_dir . $unique_name;
                     
-                    if (move_uploaded_file($file_tmp, $target_path)) {
+                    $saved = @move_uploaded_file($file_tmp, $target_path);
+                    if (!$saved && file_exists($file_tmp)) {
+                        $saved = @copy($file_tmp, $target_path);
+                    }
+
+                    if ($saved && file_exists($target_path)) {
                         $avatar_url = 'uploads/avatars/' . $unique_name;
                     } else {
-                        $message = "ไม่สามารถบันทึกไฟล์รูปภาพลงเซิร์ฟเวอร์ได้";
+                        $last_err = error_get_last();
+                        $err_detail = !empty($last_err['message']) ? " (" . $last_err['message'] . ")" : "";
+                        $message = "ไม่สามารถบันทึกไฟล์รูปภาพลงเซิร์ฟเวอร์ได้" . $err_detail;
                         $message_type = "error";
                     }
                 }
