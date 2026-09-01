@@ -144,6 +144,25 @@ $metrics_citations = $stmtCitations->fetchColumn();
 
 $avg_citations = $metrics_pubs > 0 ? round($metrics_citations / $metrics_pubs, 2) : 0;
 
+// Average H-Index (peak) across researchers in the current dept/type scope.
+// h_index_peak is a per-researcher snapshot value, not year-scoped, so the
+// year filter does not apply here (unlike $metrics_pubs/$metrics_citations above).
+$hindex_conditions = [];
+$hindex_params = [];
+if ($selected_dept !== '') {
+    $hindex_conditions[] = "department = :dept";
+    $hindex_params['dept'] = $selected_dept;
+}
+if ($selected_type !== '') {
+    $hindex_conditions[] = "researcher_type = :rtype";
+    $hindex_params['rtype'] = $selected_type;
+}
+$hindex_where = !empty($hindex_conditions) ? "WHERE " . implode(" AND ", $hindex_conditions) : "";
+
+$stmtAvgHIndex = $pdo->prepare("SELECT AVG(h_index_peak) FROM researchers $hindex_where");
+$stmtAvgHIndex->execute($hindex_params);
+$avg_h_index = round((float)($stmtAvgHIndex->fetchColumn() ?: 0), 2);
+
 // 2. Fetch Yearly Publications Chart Data (dependent on department selection but independent of selected year to show historical trend)
 $yearly_chart_conditions = ["p.publish_year IS NOT NULL", "p.publish_year > 0"];
 $yearly_chart_params = [];
@@ -756,6 +775,10 @@ include_once __DIR__ . '/includes/header.php';
     <div class="stat-card glass-panel" style="border-top: 3px solid var(--color-accent);">
         <div class="stat-number" style="color: var(--color-accent);"><?php echo number_format($metrics_citations); ?></div>
         <div class="stat-label">การอ้างอิงทั้งหมด (Citations)</div>
+    </div>
+    <div class="stat-card glass-panel" style="border-top: 3px solid #8b5cf6;">
+        <div class="stat-number" style="color: #8b5cf6;"><?php echo number_format($avg_h_index, 2); ?></div>
+        <div class="stat-label">ค่า H-Index เฉลี่ยรวม<br/>(Average H-Index)</div>
     </div>
     <div class="stat-card glass-panel" style="border-top: 3px solid #f59e0b;">
         <div class="stat-number" style="color: #f59e0b;"><?php echo number_format($avg_pubs_per_researcher, 2); ?></div>
