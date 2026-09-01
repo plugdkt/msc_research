@@ -33,6 +33,7 @@ $quartile_counts = ['Q1' => 0, 'Q2' => 0, 'Q3' => 0, 'Q4' => 0];
 $researcher_sdgs = [];
 $rcr_list = [];
 $country_list = [];
+$funding_by_sponsor = [];
 
 foreach ($publications as $pub) {
     $total_citations += $pub['citation_count'];
@@ -80,10 +81,43 @@ foreach ($publications as $pub) {
             }
         }
     }
+
+    // Funding sources - grouped by sponsor name, counting distinct grants
+    // (not publications: one grant commonly funds several papers). A grant
+    // is identified by (sponsor, funding_no) when funding_no is recorded;
+    // publications missing funding_no under the same sponsor can't be told
+    // apart, so they collapse into a single extra "unnumbered" grant rather
+    // than being counted once each.
+    $sponsor = trim($pub['funding_sponsor'] ?? '');
+    if ($sponsor !== '') {
+        if (!isset($funding_by_sponsor[$sponsor])) {
+            $funding_by_sponsor[$sponsor] = ['grant_nos' => [], 'has_unnumbered' => false, 'pub_count' => 0];
+        }
+        $funding_by_sponsor[$sponsor]['pub_count']++;
+        $grant_no = trim($pub['funding_no'] ?? '');
+        if ($grant_no !== '') {
+            $funding_by_sponsor[$sponsor]['grant_nos'][$grant_no] = true;
+        } else {
+            $funding_by_sponsor[$sponsor]['has_unnumbered'] = true;
+        }
+    }
 }
 ksort($yearly_data);
 arsort($researcher_sdgs);
 arsort($country_list);
+
+$funding_summary = [];
+foreach ($funding_by_sponsor as $sponsor => $data) {
+    $funding_summary[] = [
+        'sponsor' => $sponsor,
+        'grant_count' => count($data['grant_nos']) + ($data['has_unnumbered'] ? 1 : 0),
+        'pub_count' => $data['pub_count'],
+    ];
+}
+usort($funding_summary, function ($a, $b) {
+    return $b['grant_count'] <=> $a['grant_count'] ?: strcmp($a['sponsor'], $b['sponsor']);
+});
+$funding_total_grants = array_sum(array_column($funding_summary, 'grant_count'));
 
 $q1_q2_total = $quartile_counts['Q1'] + $quartile_counts['Q2'];
 $pub_total = count($publications);
@@ -455,7 +489,31 @@ include_once __DIR__ . '/includes/header.php';
         <div style="position: relative; height: 200px; width: 100%; margin-bottom: 20px;">
             <canvas id="researcherYearlyChart"></canvas>
         </div>
-        
+
+        <div style="margin-top: 25px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <label class="filter-label" style="margin: 0;">แหล่งทุนวิจัยที่เคยได้รับ</label>
+                <span style="font-size: 0.72rem; font-weight: 700; color: var(--color-primary); background: rgba(var(--color-primary-rgb), 0.1); border: 1px solid rgba(var(--color-primary-rgb), 0.25); border-radius: 999px; padding: 2px 9px;">
+                    รวม <?php echo number_format($funding_total_grants); ?> ทุน
+                </span>
+            </div>
+            <?php if (empty($funding_summary)): ?>
+                <div style="font-size: 0.82rem; color: var(--color-text-muted);">ไม่มีข้อมูลแหล่งทุนวิจัยของนักวิจัยท่านนี้ในระบบ</div>
+            <?php else: ?>
+                <div style="display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto;">
+                    <?php foreach ($funding_summary as $fs): ?>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px 10px;">
+                            <span style="line-height: 1.35;"><?php echo htmlspecialchars($fs['sponsor']); ?></span>
+                            <span style="flex-shrink: 0; font-weight: 700; font-family: var(--font-eng); color: var(--color-primary); white-space: nowrap;"><?php echo number_format($fs['grant_count']); ?> รอบ</span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--color-text-muted); margin-top: 10px; line-height: 1.4;">
+                    <i class="fa-solid fa-circle-info" style="margin-right: 3px;"></i>นับจากเลขทุน/รหัสทุนที่ไม่ซ้ำกันต่อแหล่งทุน ผลงานหลายชิ้นจากทุนก้อนเดียวกันจะนับเป็น 1 ทุน
+                </div>
+            <?php endif; ?>
+        </div>
+
         <div class="filter-group" style="margin-top: 25px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
             <label class="filter-label">ค้นหาภายใต้โปรไฟล์</label>
             <div class="search-box">
