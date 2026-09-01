@@ -201,14 +201,14 @@ function get_recent_publications($pdo, $limit = 5) {
 }
 
 /**
- * Get publication count grouped by publish year
+ * Get publication count and total citations grouped by publish year
  */
 function get_publications_by_year_summary($pdo) {
     try {
         $stmt = $pdo->query("
-            SELECT publish_year as year, COUNT(*) as count 
-            FROM `publications` 
-            GROUP BY publish_year 
+            SELECT publish_year as year, COUNT(*) as count, COALESCE(SUM(citation_count), 0) as citations
+            FROM `publications`
+            GROUP BY publish_year
             ORDER BY publish_year ASC
         ");
         return $stmt->fetchAll();

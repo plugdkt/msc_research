@@ -24,7 +24,6 @@ $rcr_covered_count = ($rcr_row && $rcr_row['count_val'] !== null) ? (int)$rcr_ro
 
 $recent_pubs = get_recent_publications($pdo, 6);
 $yearly_stats = get_publications_by_year_summary($pdo);
-$source_stats = get_publications_by_source_summary($pdo);
 
 // Fetch top researcher for publications count (with ties)
 // RESEARCHER-05: inactive researchers aren't spotlighted here (their old
@@ -105,16 +104,54 @@ if ($max_h >= 0) {
 // Prepare Chart.js data
 $chart_years = [];
 $chart_counts = [];
+$chart_citations = [];
 foreach ($yearly_stats as $stat) {
     $chart_years[] = $stat['year'];
     $chart_counts[] = $stat['count'];
+    $chart_citations[] = $stat['citations'];
 }
 
-$chart_sources = [];
-$chart_source_counts = [];
-foreach ($source_stats as $stat) {
-    $chart_sources[] = strtoupper($stat['source']);
-    $chart_source_counts[] = $stat['count'];
+// Average H-Index trend per year: h_index_peak has no stored history (it's
+// a running peak snapshot - see calculate_researcher_h_index() in
+// functions.php), so each year's average is approximated the same way
+// reports.php's leaderboard does it - each researcher's h-index computed
+// from only the publications with publish_year <= that year, using
+// today's citation_count (not a true historical citation count). Fetch
+// every (researcher, year, citations) row once, then compute per-year
+// cumulative h-index in PHP to avoid one DB round-trip per year.
+$stmtAllResPubs = $pdo->query("
+    SELECT rp.researcher_id, p.publish_year, p.citation_count
+    FROM `researcher_publications` rp
+    JOIN `publications` p ON rp.publication_id = p.id
+    WHERE p.publish_year IS NOT NULL AND p.publish_year > 0
+");
+$all_res_pub_rows = $stmtAllResPubs->fetchAll(PDO::FETCH_ASSOC);
+
+$chart_avg_hindex = [];
+foreach ($chart_years as $cutoff_year) {
+    $citations_by_researcher = [];
+    foreach ($all_res_pub_rows as $row) {
+        if ((int)$row['publish_year'] <= (int)$cutoff_year) {
+            $citations_by_researcher[$row['researcher_id']][] = (int)$row['citation_count'];
+        }
+    }
+
+    $h_index_sum = 0;
+    foreach ($citations_by_researcher as $citations) {
+        rsort($citations);
+        $h = 0;
+        foreach ($citations as $i => $c) {
+            $rank = $i + 1;
+            if ($c >= $rank) {
+                $h = $rank;
+            } else {
+                break;
+            }
+        }
+        $h_index_sum += $h;
+    }
+
+    $chart_avg_hindex[] = $total_researchers > 0 ? round($h_index_sum / $total_researchers, 2) : 0;
 }
 
 // Fetch publication count by quartile
@@ -339,10 +376,19 @@ include_once __DIR__ . '/includes/header.php';
     
     <div class="glass-panel" style="padding: 24px;">
         <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-chart-pie" style="color: var(--color-accent);"></i> แหล่งข้อมูลอ้างอิง (Sources)
+            <i class="fa-solid fa-chart-line" style="color: #06b6d4;"></i> แนวโน้มการอ้างอิงรายปี (Citations)
         </h3>
         <div style="position: relative; height: 260px; width: 100%;">
-            <canvas id="sourceChart"></canvas>
+            <canvas id="citationsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="glass-panel" style="padding: 24px;">
+        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chart-line" style="color: #10b981;"></i> แนวโน้ม H-Index เฉลี่ยรายปี
+        </h3>
+        <div style="position: relative; height: 260px; width: 100%;">
+            <canvas id="hindexChart"></canvas>
         </div>
     </div>
 </div>
@@ -489,7 +535,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let yearlyChartInstance = null;
-    let sourceChartInstance = null;
+    let citationsChartInstance = null;
+    let hindexChartInstance = null;
 
     window.renderDashboardChart = function() {
         const theme = getChartThemeColors();
@@ -544,25 +591,23 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // 2. Source Pie Chart
-        const ctxSource = document.getElementById('sourceChart');
-        if (ctxSource) {
-            if (sourceChartInstance) sourceChartInstance.destroy();
-            sourceChartInstance = new Chart(ctxSource, {
-                type: 'doughnut',
+        // 2. Citations Trend (line)
+        const ctxCitations = document.getElementById('citationsChart');
+        if (ctxCitations) {
+            if (citationsChartInstance) citationsChartInstance.destroy();
+            citationsChartInstance = new Chart(ctxCitations, {
+                type: 'line',
                 data: {
-                    labels: <?php echo json_encode($chart_sources); ?>,
+                    labels: <?php echo json_encode($chart_years); ?>,
                     datasets: [{
-                        data: <?php echo json_encode($chart_source_counts); ?>,
-                        backgroundColor: [
-                            'rgba(16, 185, 129, 0.6)', // ORCID (Green)
-                            'rgba(239, 68, 68, 0.6)',  // PUBMED (Red)
-                            'rgba(245, 158, 11, 0.6)', // SCOPUS (Yellow)
-                            'rgba(59, 130, 246, 0.6)', // SCHOLAR (Blue)
-                            'rgba(107, 114, 128, 0.6)' // MANUAL (Grey)
-                        ],
-                        borderColor: 'transparent',
-                        hoverOffset: 10
+                        label: 'การอ้างอิงสะสมรายปี',
+                        data: <?php echo json_encode($chart_citations); ?>,
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.15)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#06b6d4',
+                        tension: 0.3,
+                        fill: true,
                     }]
                 },
                 options: {
@@ -571,10 +616,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     onClick: (event, elements) => {
                         if (elements.length > 0) {
                             const elementIndex = elements[0].index;
-                            const source = sourceChartInstance.data.labels[elementIndex];
-                            if (source) {
-                                const sourceVal = source.toLowerCase();
-                                window.location.href = 'publications_search.php?source=' + encodeURIComponent(sourceVal);
+                            const year = citationsChartInstance.data.labels[elementIndex];
+                            if (year) {
+                                window.location.href = 'publications_search.php?year=' + encodeURIComponent(year);
                             }
                         }
                     },
@@ -582,13 +626,55 @@ document.addEventListener('DOMContentLoaded', () => {
                         event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
                     },
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: theme.text,
-                                font: { family: 'Sarabun', size: 12 },
-                                padding: 15
-                            }
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text, font: { family: 'Sarabun' } }
+                        },
+                        y: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text, precision: 0 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Average H-Index Trend (line)
+        const ctxHIndex = document.getElementById('hindexChart');
+        if (ctxHIndex) {
+            if (hindexChartInstance) hindexChartInstance.destroy();
+            hindexChartInstance = new Chart(ctxHIndex, {
+                type: 'line',
+                data: {
+                    labels: <?php echo json_encode($chart_years); ?>,
+                    datasets: [{
+                        label: 'H-Index เฉลี่ยสะสม',
+                        data: <?php echo json_encode($chart_avg_hindex); ?>,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#10b981',
+                        tension: 0.3,
+                        fill: true,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text, font: { family: 'Sarabun' } }
+                        },
+                        y: {
+                            grid: { color: theme.grid },
+                            ticks: { color: theme.text }
                         }
                     }
                 }
