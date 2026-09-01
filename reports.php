@@ -793,9 +793,6 @@ include_once __DIR__ . '/includes/header.php';
     <button id="tab-overview" class="report-tab-btn active" onclick="switchReportTab('overview')">
         <i class="fa-solid fa-gauge"></i> ภาพรวมแนวโน้ม
     </button>
-    <button id="tab-department" class="report-tab-btn" onclick="switchReportTab('department')">
-        <i class="fa-solid fa-building"></i> สรุปแยกภาควิชา
-    </button>
 
     <button id="tab-quartiles" class="report-tab-btn" onclick="switchReportTab('quartiles')">
         <i class="fa-solid fa-chart-bar"></i> สรุปตาม Quartiles
@@ -1025,76 +1022,6 @@ include_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 </div>
-
-<!-- 2. SECTION: DEPARTMENT -->
-<div id="section-department" class="report-section" style="display: none;">
-    <!-- Separated Comparison Charts -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;" class="main-grid">
-        <!-- Publications Chart -->
-        <div class="glass-panel" style="padding: 24px;">
-            <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-book" style="color: var(--color-primary);"></i> จำนวนผลงานตีพิมพ์แยกตามภาควิชา
-            </h3>
-            <div style="position: relative; height: 320px; width: 100%;">
-                <canvas id="deptPubsChart"></canvas>
-            </div>
-        </div>
-        <!-- Citations Chart -->
-        <div class="glass-panel" style="padding: 24px;">
-            <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-quote-right" style="color: var(--color-accent);"></i> Citations สะสมแยกตามภาควิชา
-            </h3>
-            <div style="position: relative; height: 320px; width: 100%;">
-                <canvas id="deptCitationsChart"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Table -->
-        <div class="glass-panel" style="padding: 30px;">
-            <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border-glass); padding-bottom: 15px;">
-                <i class="fa-solid fa-table-list" style="color: var(--color-accent);"></i> ตารางสถิติแยกตามภาควิชา
-            </h3>
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid var(--border-glass); color: var(--color-text-muted);">
-                            <th style="padding: 10px 5px;">ภาควิชา</th>
-                            <th style="padding: 10px 5px; text-align: center;">นักวิจัย (คน)</th>
-                            <th style="padding: 10px 5px; text-align: center;">ผลงานตีพิมพ์</th>
-                            <th style="padding: 10px 5px; text-align: center;">เฉลี่ยต่อคน (% คณะ)</th>
-                            <th style="padding: 10px 5px; text-align: center;">Citations รวม</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($dept_summary as $ds): ?>
-                            <tr style="border-bottom: 1px solid var(--border-glass); transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
-                                <td style="padding: 12px 5px; font-weight: 600;">
-                                    <a href="?dept=<?php echo urlencode($ds['department']); ?>" style="text-decoration: none; color: inherit; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
-                                        <?php echo htmlspecialchars($ds['department']); ?>
-                                    </a>
-                                </td>
-                                <td style="padding: 12px 5px; text-align: center; font-family: var(--font-eng);"><?php echo number_format($ds['researcher_count']); ?></td>
-                                <td style="padding: 12px 5px; text-align: center; font-family: var(--font-eng); font-weight: 600; color: var(--color-primary);"><?php echo number_format($ds['pub_count']); ?></td>
-                                <td style="padding: 12px 5px; text-align: center; font-family: var(--font-eng); font-size: 0.85rem;">
-                                    <?php 
-                                    $avg_per_person = $ds['researcher_count'] > 0 ? round($ds['pub_count'] / $ds['researcher_count'], 2) : 0.00;
-                                    $total_fac_pubs = get_total_publications($pdo);
-                                    $percent_of_total = $total_fac_pubs > 0 ? round(($ds['pub_count'] / $total_fac_pubs) * 100, 1) : 0;
-                                    echo "<strong>" . number_format($avg_per_person, 2) . "</strong> เรื่อง <span style='font-size: 0.75rem; color: var(--color-text-muted); font-weight: 500;'>(" . $percent_of_total . "%)</span>";
-                                    ?>
-                                </td>
-                                <td style="padding: 12px 5px; text-align: center; font-family: var(--font-eng); font-weight: 600; color: var(--color-accent);"><?php echo number_format($ds['total_citations']); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-
 
 <!-- 5. SECTION: LEADERBOARD -->
 <div id="section-leaderboard" class="report-section" style="display: none;">
