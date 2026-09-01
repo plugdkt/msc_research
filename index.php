@@ -16,6 +16,12 @@ $total_citations = get_total_citations($pdo);
 $stmtInterCollabs = $pdo->query("SELECT COUNT(*) FROM `publications` WHERE countries IS NOT NULL AND TRIM(countries) != '' AND TRIM(REPLACE(REPLACE(countries, 'Thailand', ''), ',', '')) != ''");
 $international_collabs_count = $stmtInterCollabs->fetchColumn() ?: 0;
 
+// Fetch RCR (Relative Citation Ratio) statistics from NIH iCite (matches reports.php)
+$stmtRCR = $pdo->query("SELECT AVG(rcr) as avg_val, COUNT(rcr) as count_val FROM `publications` WHERE rcr IS NOT NULL");
+$rcr_row = $stmtRCR->fetch();
+$avg_rcr = ($rcr_row && $rcr_row['avg_val'] !== null) ? (float)$rcr_row['avg_val'] : null;
+$rcr_covered_count = ($rcr_row && $rcr_row['count_val'] !== null) ? (int)$rcr_row['count_val'] : 0;
+
 $recent_pubs = get_recent_publications($pdo, 6);
 $yearly_stats = get_publications_by_year_summary($pdo);
 $source_stats = get_publications_by_source_summary($pdo);
@@ -144,7 +150,7 @@ include_once __DIR__ . '/includes/header.php';
 
 <!-- Stats Grid -->
 <div class="stats-grid animate-fade-in" style="animation-delay: 0.1s;">
-    <a href="researchers_list.php" class="stat-card glass-panel" style="text-decoration: none; color: inherit; display: block; transition: var(--transition-smooth); cursor: pointer;">
+    <a href="researchers_list.php" class="stat-card glass-panel" style="text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: var(--transition-smooth); cursor: pointer;">
         <div class="stat-number"><?php echo number_format($total_researchers); ?></div>
         <div class="stat-label">นักวิจัยในระบบ</div>
         <div style="font-size: 0.75rem; color: var(--color-primary); margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 5px; font-weight: 500;">
@@ -156,17 +162,36 @@ include_once __DIR__ . '/includes/header.php';
         <div class="stat-number"><?php echo number_format($total_pubs); ?></div>
         <div class="stat-label">ผลงานตีพิมพ์ทั้งหมด</div>
         <?php if ($international_collabs_count > 0): ?>
-            <a href="reports.php?tab=countries" style="text-decoration: none; font-size: 0.75rem; color: #60a5fa; margin-top: 10px; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='#60a5fa'">
+            <a href="reports.php?tab=countries" style="text-decoration: none; font-size: 0.75rem; color: #60a5fa; margin-top: 8px; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='#60a5fa'">
                 <i class="fa-solid fa-earth-americas" style="font-size: 0.8rem;"></i>
                 <span>ร่วมมือต่างประเทศ: <strong><?php echo number_format($international_collabs_count); ?></strong> เรื่อง</span>
                 <i class="fa-solid fa-chevron-right" style="font-size: 0.65rem; opacity: 0.7;"></i>
             </a>
         <?php endif; ?>
     </div>
-    <div class="stat-card glass-panel">
+    <div class="stat-card glass-panel" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
         <div class="stat-number"><?php echo number_format($total_citations); ?></div>
         <div class="stat-label">จำนวนการอ้างอิง (Citations)</div>
+        <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 8px; display: flex; align-items: center; gap: 4px;">
+            <span style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 4px; padding: 2px 6px; font-size: 0.68rem;">
+                <i class="fa-solid fa-database" style="color: #60a5fa; margin-right: 3px;"></i> แหล่งอ้างอิง: Scopus
+            </span>
+        </div>
     </div>
+    <a href="reports.php" class="stat-card glass-panel" style="text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: var(--transition-smooth); cursor: pointer;">
+        <div class="stat-number" style="color: #10b981;">
+            <?php echo $avg_rcr !== null ? number_format($avg_rcr, 2) : '-'; ?>
+        </div>
+        <div class="stat-label">ค่า RCR เฉลี่ย (ผลกระทบงานวิจัย)</div>
+        <div style="font-size: 0.72rem; color: var(--color-text-muted); margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 4px; padding: 2px 6px; font-size: 0.68rem; font-weight: 500;">
+                <i class="fa-solid fa-square-poll-vertical"></i> แหล่งอ้างอิง: NIH iCite (สหรัฐฯ)
+            </span>
+            <span style="font-size: 0.68rem; color: var(--color-text-muted);">
+                เกณฑ์เฉลี่ยโลก = 1.0<?php if ($avg_rcr !== null && $avg_rcr > 1.0): ?> | <strong style="color: #10b981;">+<?php echo round(($avg_rcr - 1.0) * 100); ?>%</strong> เหนือเกณฑ์โลก<?php endif; ?>
+            </span>
+        </div>
+    </a>
 </div>
 
 <!-- Scopus Quartiles Cards -->
