@@ -286,7 +286,7 @@ include_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Charts Grid -->
-<div class="stats-grid animate-fade-in" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); animation-delay: 0.15s;">
+<div class="stats-grid animate-fade-in" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); margin-top: 30px; animation-delay: 0.15s;">
     <div class="glass-panel" style="padding: 24px;">
         <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
             <i class="fa-solid fa-chart-bar" style="color: var(--color-primary);"></i> สถิติการตีพิมพ์รายปี
