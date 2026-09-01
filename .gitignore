@@ -18,3 +18,7 @@ config.php
 # committed to this public repo.
 /database/msc_research.sql
 /database/researchers.sql
+
+# Nested repositories
+/BPM2/
+/msc_research/
