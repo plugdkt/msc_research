@@ -504,7 +504,7 @@ include_once __DIR__ . '/includes/header.php';
                     <?php foreach ($funding_summary as $fs): ?>
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px 10px;">
                             <span style="line-height: 1.35;"><?php echo htmlspecialchars($fs['sponsor']); ?></span>
-                            <span style="flex-shrink: 0; font-weight: 700; font-family: var(--font-eng); color: var(--color-primary); white-space: nowrap;"><?php echo number_format($fs['grant_count']); ?> รอบ</span>
+                            <span style="flex-shrink: 0; font-weight: 700; font-family: var(--font-eng); color: var(--color-primary); white-space: nowrap;"><?php echo number_format($fs['grant_count']); ?> ทุน</span>
                         </div>
                     <?php endforeach; ?>
                 </div>
