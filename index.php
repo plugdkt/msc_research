@@ -285,8 +285,38 @@ include_once __DIR__ . '/includes/header.php';
     </a>
 </div>
 
+<!-- Charts Grid -->
+<div class="stats-grid animate-fade-in" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); animation-delay: 0.15s;">
+    <div class="glass-panel" style="padding: 24px;">
+        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chart-bar" style="color: var(--color-primary);"></i> สถิติการตีพิมพ์รายปี
+        </h3>
+        <div style="position: relative; height: 260px; width: 100%;">
+            <canvas id="yearlyChart"></canvas>
+        </div>
+    </div>
+
+    <div class="glass-panel" style="padding: 24px;">
+        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chart-line" style="color: #06b6d4;"></i> แนวโน้มการอ้างอิงรายปี (Citations)
+        </h3>
+        <div style="position: relative; height: 260px; width: 100%;">
+            <canvas id="citationsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="glass-panel" style="padding: 24px;">
+        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-chart-line" style="color: #10b981;"></i> แนวโน้ม H-Index เฉลี่ยรายปี
+        </h3>
+        <div style="position: relative; height: 260px; width: 100%;">
+            <canvas id="hindexChart"></canvas>
+        </div>
+    </div>
+</div>
+
 <!-- Top Researchers (Hall of Fame) -->
-<div class="stats-grid animate-fade-in" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 30px; animation-delay: 0.15s;">
+<div class="stats-grid animate-fade-in" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 30px; animation-delay: 0.2s;">
     <!-- Top Publications -->
     <div class="glass-panel" style="padding: 20px; display: flex; align-items: flex-start; gap: 15px; border-left: 4px solid var(--color-primary);">
         <div style="background: rgba(var(--color-primary-rgb), 0.1); width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: var(--color-primary); flex-shrink: 0;">
@@ -359,36 +389,6 @@ include_once __DIR__ . '/includes/header.php';
             <?php else: ?>
                 <div style="font-size: 0.9rem; color: var(--color-text-muted); margin-top: 4px;">ไม่มีข้อมูล</div>
             <?php endif; ?>
-        </div>
-    </div>
-</div>
-
-<!-- Charts Grid -->
-<div class="stats-grid animate-fade-in" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); animation-delay: 0.2s;">
-    <div class="glass-panel" style="padding: 24px;">
-        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-chart-bar" style="color: var(--color-primary);"></i> สถิติการตีพิมพ์รายปี
-        </h3>
-        <div style="position: relative; height: 260px; width: 100%;">
-            <canvas id="yearlyChart"></canvas>
-        </div>
-    </div>
-    
-    <div class="glass-panel" style="padding: 24px;">
-        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-chart-line" style="color: #06b6d4;"></i> แนวโน้มการอ้างอิงรายปี (Citations)
-        </h3>
-        <div style="position: relative; height: 260px; width: 100%;">
-            <canvas id="citationsChart"></canvas>
-        </div>
-    </div>
-
-    <div class="glass-panel" style="padding: 24px;">
-        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-chart-line" style="color: #10b981;"></i> แนวโน้ม H-Index เฉลี่ยรายปี
-        </h3>
-        <div style="position: relative; height: 260px; width: 100%;">
-            <canvas id="hindexChart"></canvas>
         </div>
     </div>
 </div>
