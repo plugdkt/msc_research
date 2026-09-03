@@ -150,7 +150,8 @@ if (!empty($all_pub_ids)) {
     $pubs_query = $pdo->query("
         SELECT 
             p.id, p.title, p.authors, p.journal_name, p.publish_year, p.quartile, 
-            p.citation_count, p.rcr, p.doi, p.url, p.funding_no, p.funding_sponsor
+            p.citation_count, p.rcr, p.doi, p.url, p.funding_no, p.funding_sponsor,
+            p.corresponding_author_id
         FROM publications p
         WHERE p.id IN ($id_list)
         ORDER BY p.publish_year DESC, p.citation_count DESC
@@ -160,13 +161,23 @@ if (!empty($all_pub_ids)) {
     }
 
     $r_query = $pdo->query("
-        SELECT rp.publication_id, CONCAT(r.title_th, r.first_name_th, ' ', r.last_name_th) AS fullname
+        SELECT 
+            rp.publication_id, 
+            r.id AS researcher_id,
+            r.first_name_en,
+            r.last_name_en,
+            CONCAT(r.title_th, r.first_name_th, ' ', r.last_name_th) AS fullname
         FROM researcher_publications rp
         JOIN researchers r ON rp.researcher_id = r.id
         WHERE rp.publication_id IN ($id_list)
     ");
     while ($r_row = $r_query->fetch(PDO::FETCH_ASSOC)) {
-        $pub_researchers[$r_row['publication_id']][] = $r_row['fullname'];
+        $pub_researchers[$r_row['publication_id']][] = [
+            'id' => (int)$r_row['researcher_id'],
+            'fullname' => $r_row['fullname'],
+            'first_name_en' => $r_row['first_name_en'],
+            'last_name_en' => $r_row['last_name_en']
+        ];
     }
 }
 
@@ -350,8 +361,8 @@ include_once __DIR__ . '/includes/header.php';
                 $grant_researchers = [];
                 foreach ($pub_ids as $p_id) {
                     if (isset($pub_researchers[(int)$p_id])) {
-                        foreach ($pub_researchers[(int)$p_id] as $name) {
-                            $grant_researchers[$name] = true;
+                        foreach ($pub_researchers[(int)$p_id] as $r_item) {
+                            $grant_researchers[$r_item['fullname']] = true;
                         }
                     }
                 }
@@ -489,6 +500,75 @@ include_once __DIR__ . '/includes/header.php';
                                         <i class="fa-solid fa-pen-nib" style="font-size: 0.7rem; margin-right: 4px;"></i>
                                         <?php echo htmlspecialchars($p['authors']); ?>
                                     </div>
+
+                                    <?php 
+                                    // Faculty Researchers and their Author Roles on this publication
+                                    $p_res_list = $pub_researchers[(int)$p_id] ?? [];
+                                    if (!empty($p_res_list)): 
+                                        $parsed_roles = [];
+                                        foreach ($p_res_list as $r_info) {
+                                            $base_role = determine_author_role($p['authors'], $r_info['first_name_en'], $r_info['last_name_en']);
+                                            $is_corr = (!empty($p['corresponding_author_id']) && (int)$p['corresponding_author_id'] === (int)$r_info['id']);
+                                            
+                                            if ($base_role === 'First Author' && $is_corr) {
+                                                $role_label = 'First & Corresponding Author';
+                                                $sort_weight = 1;
+                                            } elseif ($base_role === 'First Author') {
+                                                $role_label = 'First Author';
+                                                $sort_weight = 2;
+                                            } elseif ($is_corr) {
+                                                $role_label = 'Corresponding Author';
+                                                $sort_weight = 3;
+                                            } else {
+                                                $role_label = 'Co-Author';
+                                                $sort_weight = 4;
+                                            }
+                                            
+                                            $parsed_roles[] = [
+                                                'fullname' => $r_info['fullname'],
+                                                'role' => $role_label,
+                                                'weight' => $sort_weight
+                                            ];
+                                        }
+                                        
+                                        usort($parsed_roles, function($a, $b) {
+                                            return $a['weight'] <=> $b['weight'];
+                                        });
+                                    ?>
+                                        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+                                            <span style="font-size: 0.72rem; color: var(--color-text-muted); margin-right: 2px;">
+                                                <i class="fa-solid fa-user-check" style="color: #a78bfa;"></i> นักวิจัยในคณะ:
+                                            </span>
+                                            <?php foreach ($parsed_roles as $pr): 
+                                                $r_name = $pr['fullname'];
+                                                $r_role = $pr['role'];
+                                                if (strpos($r_role, 'First') !== false) {
+                                                    $b_bg = 'rgba(16, 185, 129, 0.15)';
+                                                    $b_color = '#10b981';
+                                                    $b_border = 'rgba(16, 185, 129, 0.35)';
+                                                    $b_icon = 'fa-solid fa-star';
+                                                } elseif (strpos($r_role, 'Corresponding') !== false) {
+                                                    $b_bg = 'rgba(245, 158, 11, 0.15)';
+                                                    $b_color = '#f59e0b';
+                                                    $b_border = 'rgba(245, 158, 11, 0.35)';
+                                                    $b_icon = 'fa-solid fa-envelope';
+                                                } else {
+                                                    $b_bg = 'rgba(139, 92, 246, 0.1)';
+                                                    $b_color = '#c084fc';
+                                                    $b_border = 'rgba(139, 92, 246, 0.25)';
+                                                    $b_icon = 'fa-solid fa-user-group';
+                                                }
+                                            ?>
+                                                <span class="badge" style="background: <?php echo $b_bg; ?>; color: var(--color-text-main); border: 1px solid <?php echo $b_border; ?>; font-size: 0.73rem; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;">
+                                                    <i class="<?php echo $b_icon; ?>" style="font-size: 0.65rem; color: <?php echo $b_color; ?>;"></i>
+                                                    <span style="font-weight: 500;"><?php echo htmlspecialchars($r_name); ?></span>
+                                                    <span style="font-size: 0.65rem; font-weight: 700; color: <?php echo $b_color; ?>; text-transform: uppercase; background: rgba(0,0,0,0.2); padding: 1px 5px; border-radius: 4px;">
+                                                        <?php echo $r_role; ?>
+                                                    </span>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
 
                                     <div style="display: flex; gap: 12px; align-items: center; font-size: 0.76rem; color: var(--color-text-muted); flex-wrap: wrap;">
                                         <span><i class="fa-solid fa-book" style="color: var(--color-secondary); margin-right: 3px;"></i> <?php echo htmlspecialchars($p['journal_name'] ?: 'N/A'); ?></span>
