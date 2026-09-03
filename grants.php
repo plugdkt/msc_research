@@ -62,10 +62,16 @@ if ($search !== '') {
         p.funding_no LIKE :s1 
         OR p.funding_sponsor LIKE :s2 
         OR p.title LIKE :s3
-        OR r.first_name_th LIKE :s4
-        OR r.last_name_th LIKE :s5
-        OR r.first_name_en LIKE :s6
-        OR r.last_name_en LIKE :s7
+        OR EXISTS (
+            SELECT 1 FROM researcher_publications rp_s
+            JOIN researchers r_s ON rp_s.researcher_id = r_s.id
+            WHERE rp_s.publication_id = p.id AND (
+                r_s.first_name_th LIKE :s4
+                OR r_s.last_name_th LIKE :s5
+                OR r_s.first_name_en LIKE :s6
+                OR r_s.last_name_en LIKE :s7
+            )
+        )
     )";
     $search_param = '%' . $search . '%';
     $params['s1'] = $search_param;
@@ -108,18 +114,15 @@ $grants_sql = "
     SELECT 
         p.funding_no,
         p.funding_sponsor,
-        COUNT(DISTINCT p.id) AS pub_count,
+        COUNT(p.id) AS pub_count,
         SUM(p.citation_count) AS total_citations,
         ROUND(AVG(CASE WHEN p.rcr IS NOT NULL THEN p.rcr ELSE NULL END), 2) AS avg_rcr,
         SUM(CASE WHEN p.quartile = 'Q1' THEN 1 ELSE 0 END) AS q1_count,
         SUM(CASE WHEN p.quartile = 'Q2' THEN 1 ELSE 0 END) AS q2_count,
         SUM(CASE WHEN p.quartile = 'Q3' THEN 1 ELSE 0 END) AS q3_count,
         SUM(CASE WHEN p.quartile = 'Q4' THEN 1 ELSE 0 END) AS q4_count,
-        GROUP_CONCAT(DISTINCT CONCAT(r.title_th, r.first_name_th, ' ', r.last_name_th) SEPARATOR ', ') AS faculty_researchers,
-        GROUP_CONCAT(DISTINCT p.id) AS pub_ids_str
+        GROUP_CONCAT(p.id) AS pub_ids_str
     FROM publications p
-    LEFT JOIN researcher_publications rp ON p.id = rp.publication_id
-    LEFT JOIN researchers r ON rp.researcher_id = r.id
     WHERE $where_sql
     GROUP BY p.funding_no, p.funding_sponsor
     ORDER BY $order_by
@@ -129,7 +132,7 @@ $stmt = $pdo->prepare($grants_sql);
 $stmt->execute($params);
 $grants = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Pre-fetch publications details for all matched grants to enable instant zero-latency expandable drawers
+// Pre-fetch publications details and faculty researchers for all matched grants
 $all_pub_ids = [];
 foreach ($grants as $g) {
     if (!empty($g['pub_ids_str'])) {
@@ -141,6 +144,7 @@ foreach ($grants as $g) {
 }
 
 $pubs_by_id = [];
+$pub_researchers = [];
 if (!empty($all_pub_ids)) {
     $id_list = implode(',', array_keys($all_pub_ids));
     $pubs_query = $pdo->query("
@@ -153,6 +157,16 @@ if (!empty($all_pub_ids)) {
     ");
     while ($p_row = $pubs_query->fetch(PDO::FETCH_ASSOC)) {
         $pubs_by_id[$p_row['id']] = $p_row;
+    }
+
+    $r_query = $pdo->query("
+        SELECT rp.publication_id, CONCAT(r.title_th, r.first_name_th, ' ', r.last_name_th) AS fullname
+        FROM researcher_publications rp
+        JOIN researchers r ON rp.researcher_id = r.id
+        WHERE rp.publication_id IN ($id_list)
+    ");
+    while ($r_row = $r_query->fetch(PDO::FETCH_ASSOC)) {
+        $pub_researchers[$r_row['publication_id']][] = $r_row['fullname'];
     }
 }
 
@@ -332,6 +346,16 @@ include_once __DIR__ . '/includes/header.php';
                 $pub_ids = !empty($g['pub_ids_str']) ? explode(',', $g['pub_ids_str']) : [];
                 $clean_drawer_id = 'grant_' . md5($g['funding_no'] . '_' . ($g['funding_sponsor'] ?? ''));
                 $is_multi_pub = $g['pub_count'] > 1;
+
+                $grant_researchers = [];
+                foreach ($pub_ids as $p_id) {
+                    if (isset($pub_researchers[(int)$p_id])) {
+                        foreach ($pub_researchers[(int)$p_id] as $name) {
+                            $grant_researchers[$name] = true;
+                        }
+                    }
+                }
+                $faculty_researchers = implode(', ', array_keys($grant_researchers));
             ?>
                 <div class="glass-panel" id="grant-card-<?php echo $clean_drawer_id; ?>" style="padding: 18px 20px; border-radius: 12px; background: rgba(255,255,255,0.015); border: 1px solid var(--border-glass); transition: var(--transition-smooth); <?php echo $is_multi_pub ? 'border-left: 4px solid #10b981;' : ''; ?>" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='rgba(255,255,255,0.015)'">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap;">
@@ -354,10 +378,10 @@ include_once __DIR__ . '/includes/header.php';
                                 <?php echo htmlspecialchars($g['funding_sponsor'] ?: 'ไม่ระบุชื่อแหล่งทุนชัดเจน'); ?>
                             </div>
 
-                            <?php if (!empty($g['faculty_researchers'])): ?>
+                            <?php if (!empty($faculty_researchers)): ?>
                                 <div style="font-size: 0.8rem; color: var(--color-text-muted); line-height: 1.4;">
                                     <i class="fa-solid fa-users" style="font-size: 0.75rem; margin-right: 4px; color: #a78bfa;"></i>
-                                    นักวิจัยในคณะ: <span style="color: var(--color-text-main);"><?php echo htmlspecialchars($g['faculty_researchers']); ?></span>
+                                    นักวิจัยในคณะ: <span style="color: var(--color-text-main);"><?php echo htmlspecialchars($faculty_researchers); ?></span>
                                 </div>
                             <?php endif; ?>
                         </div>
