@@ -161,25 +161,16 @@ include_once __DIR__ . '/includes/header.php';
 
 <!-- Hero / Page Header -->
 <div class="hero glass-panel animate-fade-in" style="padding: 30px 24px; margin-bottom: 30px; position: relative; overflow: hidden;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 300px;">
+        <div>
             <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: #10b981; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); border-radius: 999px; padding: 4px 12px; margin-bottom: 12px;">
                 <i class="fa-solid fa-hand-holding-dollar"></i> Grant Output &amp; ROI Tracker
             </div>
             <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 8px;">
                 ระบบติดตามผลผลิตโครงการวิจัย (Grant Outputs)
             </h2>
-            <p style="color: var(--color-text-muted); font-size: 0.95rem; margin: 0; line-height: 1.6; max-width: 780px;">
+            <p style="color: var(--color-text-muted); font-size: 0.95rem; margin: 0; line-height: 1.6; max-width: 850px;">
                 วิเคราะห์ผลิตภาพทางวิชาการและผลตอบแทนต่อเงินทุน (Research ROI) เจาะลึกรายรหัสสัญญาโครงการวิจัย ตรวจสอบจำนวนผลงานตีพิมพ์ สัดส่วนระดับ Quartile (Q1–Q4) และการอ้างอิงสะสมที่เกิดจากแต่ละทุนวิจัย
             </p>
-        </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <a href="reports.php?tab=funding" class="btn-premium" style="padding: 10px 18px; text-decoration: none; font-size: 0.85rem; font-weight: 600; background: rgba(255,255,255,0.05); border-color: var(--border-glass); color: var(--color-text-main);">
-                <i class="fa-solid fa-chart-pie"></i> สรุปตามแหล่งทุน
-            </a>
-            <a href="publications_search.php" class="btn-premium" style="padding: 10px 18px; text-decoration: none; font-size: 0.85rem; font-weight: 600; background: linear-gradient(135deg, #10b981, #059669); border-color: rgba(16,185,129,0.4);">
-                <i class="fa-solid fa-magnifying-glass"></i> ค้นหาผลงานทั้งหมด
-            </a>
         </div>
     </div>
 </div>
