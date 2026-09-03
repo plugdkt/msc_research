@@ -60,6 +60,9 @@
                 <a href="<?php echo $base_url ?? './'; ?>reports.php" class="nav-link <?php echo ($current_page ?? '') === 'reports' ? 'active' : ''; ?>">
                     <i class="fa-solid fa-chart-pie"></i> รายงานสรุป
                 </a>
+                <a href="<?php echo $base_url ?? './'; ?>grants.php" class="nav-link <?php echo ($current_page ?? '') === 'grants' ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-hand-holding-dollar"></i> ติดตามทุนวิจัย
+                </a>
                 <a href="<?php echo $base_url ?? './'; ?>admin/index.php" class="nav-link">
                     <i class="fa-solid fa-lock"></i> ระบบ Admin
                 </a>

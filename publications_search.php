@@ -35,10 +35,12 @@ $conditions = [];
 $params = [];
 
 if ($search !== '') {
-    $conditions[] = "(p.title LIKE :search1 OR p.authors LIKE :search2 OR p.journal_name LIKE :search3)";
+    $conditions[] = "(p.title LIKE :search1 OR p.authors LIKE :search2 OR p.journal_name LIKE :search3 OR p.funding_no LIKE :search4 OR p.funding_sponsor LIKE :search5)";
     $params['search1'] = '%' . $search . '%';
     $params['search2'] = '%' . $search . '%';
     $params['search3'] = '%' . $search . '%';
+    $params['search4'] = '%' . $search . '%';
+    $params['search5'] = '%' . $search . '%';
 }
 
 if ($selected_dept !== '') {
@@ -190,7 +192,7 @@ include_once __DIR__ . '/includes/header.php';
             
             <!-- Search Text -->
             <div>
-                <label style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 8px; font-weight: 500;">คำค้นหา (ชื่อบทความ, ผู้แต่ง, วารสาร)</label>
+                <label style="font-size: 0.8rem; color: var(--color-text-muted); display: block; margin-bottom: 8px; font-weight: 500;">คำค้นหา (ชื่อบทความ, ผู้แต่ง, วารสาร, รหัสทุน/สัญญา)</label>
                 <div style="position: relative;">
                     <input type="text" name="q" class="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="พิมพ์คำค้นหา..." style="padding-left: 35px; width: 100%;">
                     <i class="fa-solid fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); font-size: 0.85rem;"></i>
