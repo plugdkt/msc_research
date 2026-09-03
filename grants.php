@@ -129,7 +129,7 @@ $stmt = $pdo->prepare($grants_sql);
 $stmt->execute($params);
 $grants = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Pre-fetch publications details for all matched grants to enable instant zero-latency modal drilldowns
+// Pre-fetch publications details for all matched grants to enable instant zero-latency expandable drawers
 $all_pub_ids = [];
 foreach ($grants as $g) {
     if (!empty($g['pub_ids_str'])) {
@@ -325,7 +325,7 @@ include_once __DIR__ . '/includes/header.php';
             </span>
         </h3>
         <span style="font-size: 0.78rem; color: var(--color-text-muted);">
-            คลิกที่ปุ่ม <strong>"ดูผลงาน (X ฉบับ)"</strong> เพื่อเปิดดูรายละเอียดบทความวิจัยทั้งหมดของทุนนั้น
+            คลิกที่ปุ่ม <strong>"ดูผลงาน (X ฉบับ)"</strong> เพื่อขยายดูรายละเอียดบทความวิจัยทั้งหมดของทุนนั้น
         </span>
     </div>
 
@@ -339,10 +339,10 @@ include_once __DIR__ . '/includes/header.php';
         <div style="display: flex; flex-direction: column; gap: 14px;">
             <?php foreach ($grants as $index => $g): 
                 $pub_ids = !empty($g['pub_ids_str']) ? explode(',', $g['pub_ids_str']) : [];
-                $clean_modal_id = 'grant_' . md5($g['funding_no'] . '_' . ($g['funding_sponsor'] ?? ''));
+                $clean_drawer_id = 'grant_' . md5($g['funding_no'] . '_' . ($g['funding_sponsor'] ?? ''));
                 $is_multi_pub = $g['pub_count'] > 1;
             ?>
-                <div class="glass-panel" style="padding: 18px 20px; border-radius: 12px; background: rgba(255,255,255,0.015); border: 1px solid var(--border-glass); transition: var(--transition-smooth); <?php echo $is_multi_pub ? 'border-left: 4px solid #10b981;' : ''; ?>" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='rgba(255,255,255,0.015)'">
+                <div class="glass-panel" id="grant-card-<?php echo $clean_drawer_id; ?>" style="padding: 18px 20px; border-radius: 12px; background: rgba(255,255,255,0.015); border: 1px solid var(--border-glass); transition: var(--transition-smooth); <?php echo $is_multi_pub ? 'border-left: 4px solid #10b981;' : ''; ?>" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='rgba(255,255,255,0.015)'">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap;">
                         <!-- Left: Grant identity & Sponsor -->
                         <div style="flex: 2; min-width: 280px;">
@@ -412,55 +412,43 @@ include_once __DIR__ . '/includes/header.php';
 
                         <!-- Right: Action Button -->
                         <div style="align-self: center;">
-                            <button type="button" onclick="openGrantModal('<?php echo $clean_modal_id; ?>')" class="btn-premium" style="padding: 9px 16px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; background: <?php echo $is_multi_pub ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.06)'; ?>; border-color: <?php echo $is_multi_pub ? 'rgba(16,185,129,0.4)' : 'var(--border-glass)'; ?>;">
-                                <i class="fa-solid fa-book-open"></i> ดูผลงาน (<?php echo $g['pub_count']; ?> ฉบับ)
+                            <button type="button" onclick="toggleGrantDrawer('<?php echo $clean_drawer_id; ?>')" id="btn-toggle-<?php echo $clean_drawer_id; ?>" class="btn-premium" style="padding: 9px 16px; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; background: <?php echo $is_multi_pub ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.06)'; ?>; border-color: <?php echo $is_multi_pub ? 'rgba(16,185,129,0.4)' : 'var(--border-glass)'; ?>; cursor: pointer;">
+                                <i class="fa-solid fa-chevron-down" id="icon-<?php echo $clean_drawer_id; ?>"></i>
+                                <span id="text-<?php echo $clean_drawer_id; ?>">ดูผลงาน (<?php echo $g['pub_count']; ?> ฉบับ)</span>
                             </button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Modal Window for this grant's publications -->
-                <div id="modal-<?php echo $clean_modal_id; ?>" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
-                    <div class="glass-panel" style="background: #0f172a; border: 1px solid var(--border-glass); border-radius: 18px; width: 100%; max-width: 860px; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,0.6); animation: slideUp 0.3s ease;">
-                        
-                        <!-- Modal Header -->
-                        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center; gap: 15px; background: rgba(255,255,255,0.02);">
-                            <div>
-                                <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600; color: #10b981; background: rgba(16,185,129,0.1); padding: 2px 8px; border-radius: 4px; margin-bottom: 4px;">
-                                    <i class="fa-solid fa-file-contract"></i> รหัสสัญญาโครงการวิจัย
-                                </div>
-                                <h3 style="margin: 0; font-size: 1.3rem; font-weight: 700; color: #34d399; font-family: var(--font-eng);">
-                                    <?php echo htmlspecialchars($g['funding_no']); ?>
-                                </h3>
-                                <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 4px;">
-                                    ผู้มอบทุน: <strong style="color: var(--color-text-main);"><?php echo htmlspecialchars($g['funding_sponsor'] ?: 'ไม่ระบุแหล่งทุน'); ?></strong>
-                                    &bull; ผลงานทั้งหมด: <strong style="color: #10b981; font-family: var(--font-eng);"><?php echo $g['pub_count']; ?></strong> ฉบับ
-                                    &bull; Citations รวม: <strong style="color: #fbbf24; font-family: var(--font-eng);"><?php echo number_format($g['total_citations']); ?></strong> ครั้ง
-                                </div>
+                    <!-- In-Place Publications List Drawer (Expands smoothly on click) -->
+                    <div id="drawer-<?php echo $clean_drawer_id; ?>" class="grant-drawer" style="display: none; margin-top: 20px; border-top: 1px dashed rgba(255,255,255,0.12); padding-top: 18px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                            <div style="font-size: 0.88rem; font-weight: 600; color: #10b981; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-book-open"></i>
+                                รายการผลงานตีพิมพ์ที่ได้รับทุนสนับสนุนนี้ (<?php echo $g['pub_count']; ?> ฉบับ)
                             </div>
-                            <button type="button" onclick="closeGrantModal('<?php echo $clean_modal_id; ?>')" style="background: none; border: none; font-size: 1.6rem; color: var(--color-text-muted); cursor: pointer; padding: 4px 8px; line-height: 1;" title="ปิดหน้าต่าง">
-                                &times;
-                            </button>
+                            <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+                                รหัสทุน: <strong style="color: #34d399; font-family: var(--font-eng);"><?php echo htmlspecialchars($g['funding_no']); ?></strong>
+                                &bull; Citations รวม: <strong style="color: #fbbf24; font-family: var(--font-eng);"><?php echo number_format($g['total_citations']); ?></strong> ครั้ง
+                            </div>
                         </div>
 
-                        <!-- Modal Body (Publication Cards) -->
-                        <div style="padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; flex: 1;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
                             <?php foreach ($pub_ids as $p_id): 
                                 if (!isset($pubs_by_id[(int)$p_id])) continue;
                                 $p = $pubs_by_id[(int)$p_id];
                             ?>
-                                <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 10px; padding: 16px; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px;">
-                                        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; line-height: 1.4; flex: 1;">
+                                <div style="background: rgba(255,255,255,0.025); border: 1px solid var(--border-glass); border-radius: 10px; padding: 14px 16px; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.025)'">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 6px;">
+                                        <h4 style="margin: 0; font-size: 0.92rem; font-weight: 600; line-height: 1.45; flex: 1;">
                                             <?php if (!empty($p['url'])): ?>
-                                                <a href="<?php echo htmlspecialchars($p['url']); ?>" target="_blank" style="color: inherit; text-decoration: none;" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
+                                                <a href="<?php echo htmlspecialchars($p['url']); ?>" target="_blank" style="color: inherit; text-decoration: none; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
                                                     <?php echo htmlspecialchars($p['title']); ?>
-                                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.75rem; margin-left: 4px; opacity: 0.7;"></i>
+                                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.72rem; margin-left: 4px; opacity: 0.7;"></i>
                                                 </a>
                                             <?php elseif (!empty($p['doi'])): ?>
-                                                <a href="https://doi.org/<?php echo htmlspecialchars($p['doi']); ?>" target="_blank" style="color: inherit; text-decoration: none;" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
+                                                <a href="https://doi.org/<?php echo htmlspecialchars($p['doi']); ?>" target="_blank" style="color: inherit; text-decoration: none; transition: var(--transition-smooth);" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
                                                     <?php echo htmlspecialchars($p['title']); ?>
-                                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.75rem; margin-left: 4px; opacity: 0.7;"></i>
+                                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.72rem; margin-left: 4px; opacity: 0.7;"></i>
                                                 </a>
                                             <?php else: ?>
                                                 <?php echo htmlspecialchars($p['title']); ?>
@@ -476,18 +464,18 @@ include_once __DIR__ . '/includes/header.php';
                                             elseif ($p['quartile'] === 'Q3') { $q_bg = 'rgba(245,158,11,0.15)'; $q_color = '#f59e0b'; }
                                             elseif ($p['quartile'] === 'Q4') { $q_bg = 'rgba(239,68,68,0.15)'; $q_color = '#ef4444'; }
                                         ?>
-                                            <span class="badge" style="background: <?php echo $q_bg; ?>; color: <?php echo $q_color; ?>; border: 1px solid <?php echo $q_color; ?>44; font-weight: 700; font-size: 0.75rem; padding: 2px 7px; border-radius: 4px; white-space: nowrap;">
+                                            <span class="badge" style="background: <?php echo $q_bg; ?>; color: <?php echo $q_color; ?>; border: 1px solid <?php echo $q_color; ?>44; font-weight: 700; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px; white-space: nowrap;">
                                                 <?php echo $p['quartile']; ?>
                                             </span>
                                         <?php endif; ?>
                                     </div>
 
-                                    <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 8px; line-height: 1.4;">
+                                    <div style="font-size: 0.78rem; color: var(--color-text-muted); margin-bottom: 6px; line-height: 1.4;">
                                         <i class="fa-solid fa-pen-nib" style="font-size: 0.7rem; margin-right: 4px;"></i>
                                         <?php echo htmlspecialchars($p['authors']); ?>
                                     </div>
 
-                                    <div style="display: flex; gap: 12px; align-items: center; font-size: 0.78rem; color: var(--color-text-muted); flex-wrap: wrap;">
+                                    <div style="display: flex; gap: 12px; align-items: center; font-size: 0.76rem; color: var(--color-text-muted); flex-wrap: wrap;">
                                         <span><i class="fa-solid fa-book" style="color: var(--color-secondary); margin-right: 3px;"></i> <?php echo htmlspecialchars($p['journal_name'] ?: 'N/A'); ?></span>
                                         <span>&bull;</span>
                                         <span>ปีที่พิมพ์: <strong style="color: var(--color-text-main); font-family: var(--font-eng);"><?php echo $p['publish_year']; ?></strong></span>
@@ -510,13 +498,6 @@ include_once __DIR__ . '/includes/header.php';
                                 </div>
                             <?php endforeach; ?>
                         </div>
-
-                        <!-- Modal Footer -->
-                        <div style="padding: 14px 24px; border-top: 1px solid var(--border-glass); background: rgba(0,0,0,0.2); display: flex; justify-content: flex-end;">
-                            <button type="button" onclick="closeGrantModal('<?php echo $clean_modal_id; ?>')" class="btn-premium" style="padding: 8px 18px; font-size: 0.85rem; font-weight: 600; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: var(--color-text-main);">
-                                ปิดหน้าต่าง
-                            </button>
-                        </div>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -525,41 +506,40 @@ include_once __DIR__ . '/includes/header.php';
 </div>
 
 <script>
-function openGrantModal(id) {
-    const m = document.getElementById('modal-' + id);
-    if (m) {
-        m.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
+// Toggle in-place drawer for publications
+function toggleGrantDrawer(id) {
+    const drawer = document.getElementById('drawer-' + id);
+    const icon = document.getElementById('icon-' + id);
+    const btnText = document.getElementById('text-' + id);
+    if (!drawer) return;
+
+    if (drawer.style.display === 'none' || !drawer.style.display) {
+        drawer.style.display = 'block';
+        if (icon) icon.className = 'fa-solid fa-chevron-up';
+        if (btnText) btnText.innerText = 'ซ่อนผลงาน';
+        
+        // Smooth scroll slightly into view if drawer is large
+        drawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+        drawer.style.display = 'none';
+        if (icon) icon.className = 'fa-solid fa-chevron-down';
+        if (btnText) {
+            // Restore original text from data or count
+            const pubCount = drawer.querySelectorAll('h4').length;
+            btnText.innerText = 'ดูผลงาน (' + pubCount + ' ฉบับ)';
+        }
     }
 }
 
-function closeGrantModal(id) {
-    const m = document.getElementById('modal-' + id);
-    if (m) {
-        m.style.display = 'none';
-        document.body.style.overflow = '';
-    }
-}
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-overlay').forEach(m => {
-            m.style.display = 'none';
-        });
-        document.body.style.overflow = '';
-    }
-});
-
-// Auto-open modal if specified in URL query ?no=...
+// Auto-expand drawer if specified in URL query ?no=...
 document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const grantNo = urlParams.get('no');
     if (grantNo) {
-        // Find modal whose header has this grant no
-        document.querySelectorAll('.modal-overlay').forEach(m => {
-            if (m.innerText.includes(grantNo)) {
-                m.style.display = 'flex';
-                document.body.style.overflow = 'hidden';
+        document.querySelectorAll('.glass-panel').forEach(card => {
+            if (card.innerText && card.innerText.includes(grantNo)) {
+                const btn = card.querySelector('button[id^="btn-toggle-"]');
+                if (btn) btn.click();
             }
         });
     }
