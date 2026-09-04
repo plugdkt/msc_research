@@ -183,7 +183,7 @@ function get_recent_publications($pdo, $limit = 5) {
         $stmt = $pdo->prepare("
             SELECT p.*, 
                    GROUP_CONCAT(r.first_name_th, ' ', r.last_name_th SEPARATOR ', ') as internal_authors,
-                   CONCAT(ca.title_th, ca.first_name_th, ' ', ca.last_name_th) as corresponding_author_name
+                   CONCAT(COALESCE(ca.title_th, ''), ca.first_name_th, ' ', ca.last_name_th) as corresponding_author_name
             FROM `publications` p
             LEFT JOIN `researcher_publications` rp ON p.id = rp.publication_id
             LEFT JOIN `researchers` r ON rp.researcher_id = r.id
@@ -408,7 +408,7 @@ function get_researcher_publications($pdo, $researcher_id) {
     try {
         $stmt = $pdo->prepare("
             SELECT p.*,
-                   CONCAT(ca.title_th, ca.first_name_th, ' ', ca.last_name_th) as corresponding_author_name
+                   CONCAT(COALESCE(ca.title_th, ''), ca.first_name_th, ' ', ca.last_name_th) as corresponding_author_name
             FROM `publications` p
             JOIN `researcher_publications` rp ON p.id = rp.publication_id
             LEFT JOIN `researchers` ca ON p.corresponding_author_id = ca.id

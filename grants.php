@@ -166,7 +166,7 @@ if (!empty($all_pub_ids)) {
             r.id AS researcher_id,
             r.first_name_en,
             r.last_name_en,
-            CONCAT(r.title_th, r.first_name_th, ' ', r.last_name_th) AS fullname
+            TRIM(CONCAT(COALESCE(r.title_th, ''), ' ', r.first_name_th, ' ', r.last_name_th)) AS fullname
         FROM researcher_publications rp
         JOIN researchers r ON rp.researcher_id = r.id
         WHERE rp.publication_id IN ($id_list)
@@ -363,7 +363,13 @@ include_once __DIR__ . '/includes/header.php';
                 foreach ($pub_ids as $p_id) {
                     if (isset($pub_researchers[(int)$p_id])) {
                         foreach ($pub_researchers[(int)$p_id] as $r_item) {
-                            $grant_researchers[$r_item['fullname']] = true;
+                            $r_name = trim($r_item['fullname'] ?? '');
+                            if ($r_name === '') {
+                                $r_name = trim(($r_item['first_name_en'] ?? '') . ' ' . ($r_item['last_name_en'] ?? ''));
+                            }
+                            if ($r_name !== '') {
+                                $grant_researchers[$r_name] = true;
+                            }
                         }
                     }
                 }
