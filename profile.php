@@ -372,7 +372,7 @@ include_once __DIR__ . '/includes/header.php';
                         <i class="fa-solid fa-graduation-cap"></i> Scholar <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i>
                     </a>
                 <?php endif; ?>
-                <a href="embed_generator.php?res_id=<?php echo (int)$researcher_id; ?>" class="badge" style="padding: 5px 10px; text-decoration: none; font-weight: 500; font-size: 0.8rem; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" title="สร้าง Embed Widget โปรไฟล์นี้สำหรับเว็บหลัก">
+                <a href="admin/embed.php?res_id=<?php echo (int)$researcher_id; ?>" class="badge" style="padding: 5px 10px; text-decoration: none; font-weight: 500; font-size: 0.8rem; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" title="สร้าง Embed Widget โปรไฟล์นี้สำหรับเว็บหลัก">
                     <i class="fa-solid fa-code"></i> ฝังวิดเจ็ต (Embed)
                 </a>
             </div>

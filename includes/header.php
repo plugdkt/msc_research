@@ -63,9 +63,6 @@
                 <a href="<?php echo $base_url ?? './'; ?>grants.php" class="nav-link <?php echo ($current_page ?? '') === 'grants' ? 'active' : ''; ?>">
                     <i class="fa-solid fa-hand-holding-dollar"></i> Grant Outputs
                 </a>
-                <a href="<?php echo $base_url ?? './'; ?>embed_generator.php" class="nav-link <?php echo ($current_page ?? '') === 'embed' ? 'active' : ''; ?>" title="สร้าง Embed Widget สำหรับหน้าเว็บหลัก">
-                    <i class="fa-solid fa-code"></i> Embed วิดเจ็ต
-                </a>
                 <a href="<?php echo $base_url ?? './'; ?>admin/index.php" class="nav-link">
                     <i class="fa-solid fa-lock"></i> ระบบ Admin
                 </a>

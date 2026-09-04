@@ -41,6 +41,12 @@ $researchers = get_all_researchers($pdo, false); // admin manages everyone, incl
         <h3 style="margin-bottom: 8px;">ซิงค์ข้อมูล API</h3>
         <p style="font-size: 0.85rem; color: var(--color-text-muted);">เรียกเชื่อมต่อดึงข้อมูลล่าสุดจาก ORCID, PubMed และ Scopus</p>
     </a>
+    
+    <a href="embed.php" class="glass-panel stat-card" style="text-decoration: none; color: inherit; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px;">
+        <i class="fa-solid fa-code" style="font-size: 3rem; color: #38bdf8; margin-bottom: 15px;"></i>
+        <h3 style="margin-bottom: 8px;">สร้าง Embed วิดเจ็ต</h3>
+        <p style="font-size: 0.85rem; color: var(--color-text-muted);">สร้างโค้ด iframe นำผลงานวิจัยไปฝังแสดงผลบนเว็บไซต์ภายนอก</p>
+    </a>
 </div>
 
 <!-- Database Stats & Researchers List -->

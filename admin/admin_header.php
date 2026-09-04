@@ -204,9 +204,12 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                         </a>
                         <a href="sdg_validation.php" class="dropdown-item <?php echo $current_page === 'admin_sdg_validation' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-clipboard-check"></i> วัดความแม่นยำ SDG (P/R/F1)
-                        </a>
                     </div>
                 </div>
+
+                <a href="embed.php" class="nav-link <?php echo $current_page === 'admin_embed' ? 'active' : ''; ?>">
+                    <i class="fa-solid fa-code" style="color: #38bdf8;"></i> Embed วิดเจ็ต
+                </a>
 
                 <a href="logout.php" class="btn-logout">
                     <i class="fa-solid fa-sign-out-alt"></i> ออกระบบ
