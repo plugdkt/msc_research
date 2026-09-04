@@ -141,7 +141,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                 </a>
 
                 <div class="nav-dropdown">
-                    <a href="researchers.php" class="nav-link <?php echo in_array($current_page, ['admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_import', 'admin_sync', 'admin_users']) ? 'active' : ''; ?>">
+                    <a href="researchers.php" class="nav-link <?php echo in_array($current_page, ['admin_researchers', 'admin_publications', 'admin_corresponding', 'admin_import', 'admin_sync', 'admin_users', 'admin_embed']) ? 'active' : ''; ?>">
                         <i class="fa-solid fa-database"></i> ข้อมูลหลัก <i class="fa-solid fa-chevron-down" style="font-size: 0.7rem; margin-left: 2px;"></i>
                     </a>
                     <div class="dropdown-menu">
@@ -159,6 +159,9 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                         </a>
                         <a href="sync.php" class="dropdown-item <?php echo $current_page === 'admin_sync' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-rotate"></i> Sync API
+                        </a>
+                        <a href="embed.php" class="dropdown-item <?php echo $current_page === 'admin_embed' ? 'active' : ''; ?>">
+                            <i class="fa-solid fa-code"></i> สร้าง Embed วิดเจ็ต
                         </a>
                         <?php if (($_SESSION['admin_role'] ?? '') === 'superadmin'): ?>
                         <a href="users.php" class="dropdown-item <?php echo $current_page === 'admin_users' ? 'active' : ''; ?>">
@@ -204,12 +207,9 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
                         </a>
                         <a href="sdg_validation.php" class="dropdown-item <?php echo $current_page === 'admin_sdg_validation' ? 'active' : ''; ?>">
                             <i class="fa-solid fa-clipboard-check"></i> วัดความแม่นยำ SDG (P/R/F1)
+                        </a>
                     </div>
                 </div>
-
-                <a href="embed.php" class="nav-link <?php echo $current_page === 'admin_embed' ? 'active' : ''; ?>">
-                    <i class="fa-solid fa-code" style="color: #38bdf8;"></i> Embed วิดเจ็ต
-                </a>
 
                 <a href="logout.php" class="btn-logout">
                     <i class="fa-solid fa-sign-out-alt"></i> ออกระบบ
