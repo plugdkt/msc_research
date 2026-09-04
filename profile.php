@@ -119,6 +119,67 @@ usort($funding_summary, function ($a, $b) {
 });
 $funding_total_grants = array_sum(array_column($funding_summary, 'grant_count'));
 
+// Build structured Grant Outputs for this researcher
+$researcher_grants = [];
+foreach ($publications as $pub) {
+    $f_no = trim($pub['funding_no'] ?? '');
+    if ($f_no === '') continue;
+
+    $sponsor = trim($pub['funding_sponsor'] ?? '') ?: 'ไม่ระบุชื่อแหล่งทุน';
+    $grant_key = $f_no . '___' . $sponsor;
+
+    $role = determine_author_role($pub['authors'], $researcher['first_name_en'], $researcher['last_name_en']);
+    $is_corr = (!empty($pub['corresponding_author_id']) && (int)$pub['corresponding_author_id'] === (int)$researcher_id);
+
+    if ($role === 'First Author' && $is_corr) {
+        $p_role = 'First & Corresponding Author';
+    } elseif ($role === 'First Author') {
+        $p_role = 'First Author';
+    } elseif ($is_corr) {
+        $p_role = 'Corresponding Author';
+    } else {
+        $p_role = 'Co-Author';
+    }
+
+    if (!isset($researcher_grants[$grant_key])) {
+        $researcher_grants[$grant_key] = [
+            'funding_no' => $f_no,
+            'funding_sponsor' => $sponsor,
+            'total_citations' => 0,
+            'q_counts' => ['Q1' => 0, 'Q2' => 0, 'Q3' => 0, 'Q4' => 0, 'Other' => 0],
+            'roles_count' => ['First' => 0, 'Corresponding' => 0, 'CoAuthor' => 0],
+            'papers' => []
+        ];
+    }
+
+    $pub_copy = $pub;
+    $pub_copy['my_role'] = $p_role;
+    $researcher_grants[$grant_key]['papers'][] = $pub_copy;
+    $researcher_grants[$grant_key]['total_citations'] += (int)($pub['citation_count'] ?? 0);
+
+    $q = $pub['quartile'] ?? '';
+    if (isset($researcher_grants[$grant_key]['q_counts'][$q])) {
+        $researcher_grants[$grant_key]['q_counts'][$q]++;
+    } else {
+        $researcher_grants[$grant_key]['q_counts']['Other']++;
+    }
+
+    if (strpos($p_role, 'First') !== false) {
+        $researcher_grants[$grant_key]['roles_count']['First']++;
+    } elseif (strpos($p_role, 'Corresponding') !== false) {
+        $researcher_grants[$grant_key]['roles_count']['Corresponding']++;
+    } else {
+        $researcher_grants[$grant_key]['roles_count']['CoAuthor']++;
+    }
+}
+
+uasort($researcher_grants, function ($a, $b) {
+    $cA = count($a['papers']);
+    $cB = count($b['papers']);
+    if ($cA !== $cB) return $cB <=> $cA;
+    return $b['total_citations'] <=> $a['total_citations'];
+});
+
 $q1_q2_total = $quartile_counts['Q1'] + $quartile_counts['Q2'];
 $pub_total = count($publications);
 $q1_q2_pct = $pub_total > 0 ? round(($q1_q2_total / $pub_total) * 100) : 0;
@@ -167,6 +228,60 @@ $chart_counts = array_values($yearly_data);
 
 include_once __DIR__ . '/includes/header.php';
 ?>
+
+<style>
+    .profile-tab-btn {
+        padding: 10px 18px;
+        border-radius: 8px;
+        border: 1px solid var(--border-glass);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--color-text-muted);
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition-smooth);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .profile-tab-btn:hover {
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--color-text-main);
+    }
+    body.light-mode .profile-tab-btn {
+        background: rgba(0, 0, 0, 0.03);
+        border-color: rgba(0, 0, 0, 0.08);
+    }
+    body.light-mode .profile-tab-btn:hover {
+        background: rgba(0, 0, 0, 0.06);
+    }
+    .profile-tab-btn.active {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)) !important;
+        border-color: transparent !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(var(--color-primary-rgb), 0.25);
+    }
+    .profile-grant-card {
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.015);
+        border: 1px solid var(--border-glass);
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: var(--transition-smooth);
+    }
+    .profile-grant-card:hover {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(16, 185, 129, 0.4);
+    }
+    body.light-mode .profile-grant-card {
+        background: #ffffff;
+        border-color: rgba(0, 0, 0, 0.08);
+    }
+    body.light-mode .profile-grant-card:hover {
+        background: #fafafa;
+        border-color: rgba(16, 185, 129, 0.5);
+    }
+</style>
 
 <!-- Back Button -->
 <div style="margin-bottom: 20px;" class="animate-fade-in">
@@ -493,9 +608,11 @@ include_once __DIR__ . '/includes/header.php';
         <div style="margin-top: 25px; border-top: 1px solid var(--border-glass); padding-top: 15px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                 <label class="filter-label" style="margin: 0;">แหล่งทุนวิจัยที่เคยได้รับ</label>
-                <span style="font-size: 0.72rem; font-weight: 700; color: var(--color-primary); background: rgba(var(--color-primary-rgb), 0.1); border: 1px solid rgba(var(--color-primary-rgb), 0.25); border-radius: 999px; padding: 2px 9px;">
-                    รวม <?php echo number_format($funding_total_grants); ?> ทุน
-                </span>
+                <a href="javascript:void(0)" onclick="switchProfileTab('grants')" style="text-decoration: none;" title="คลิกเพื่อดูรายละเอียดโครงการทุนวิจัย">
+                    <span style="font-size: 0.72rem; font-weight: 700; color: #10b981; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 999px; padding: 2px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                        รวม <?php echo count($researcher_grants); ?> ทุน <i class="fa-solid fa-arrow-right" style="font-size: 0.65rem;"></i>
+                    </span>
+                </a>
             </div>
             <?php if (empty($funding_summary)): ?>
                 <div style="font-size: 0.82rem; color: var(--color-text-muted);">ไม่มีข้อมูลแหล่งทุนวิจัยของนักวิจัยท่านนี้ในระบบ</div>
@@ -523,151 +640,376 @@ include_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
-    <!-- Publications List -->
+    <!-- Main Right Content Column with Tabs -->
     <div>
-        <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-book" style="color: var(--color-primary);"></i> รายการผลงานสิ่งตีพิมพ์ (<?php echo count($publications); ?> รายการ)
-        </h3>
-        
-        <div class="publications-list">
-            <?php if (empty($publications)): ?>
-                <div class="glass-panel" style="padding: 40px; text-align: center; color: var(--color-text-muted);">
-                    <i class="fa-regular fa-folder-open" style="font-size: 3rem; margin-bottom: 16px; display: block;"></i>
-                    ยังไม่มีผลงานตีพิมพ์วิชาการของนักวิจัยท่านนี้ในระบบ
-                </div>
-            <?php else: ?>
-                <?php foreach ($publications as $pub): ?>
-                    <div class="glass-panel publication-card searchable-item animate-fade-in">
-                        <div class="pub-title"><?php echo htmlspecialchars($pub['title']); ?></div>
-                        <div class="pub-authors">ผู้แต่ง: <?php echo htmlspecialchars($pub['authors']); ?></div>
-                        
-                        <div class="pub-journal">
-                            <i class="fa-solid fa-journal-whills"></i> <?php echo htmlspecialchars($pub['journal_name'] ?? 'ไม่ระบุวารสาร'); ?> (<?php echo $pub['publish_year']; ?>)
-                        </div>
-                        
-                        <?php if (!empty($pub['countries'])): ?>
-                            <div style="font-size: 0.8rem; margin-bottom: 8px; color: var(--color-text-muted); display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
-                                <i class="fa-solid fa-earth-americas" style="color: #60a5fa; width: 14px;"></i> ประเทศร่วมวิจัย: 
-                                <strong>
-                                    <?php 
-                                    $c_parts = preg_split('/\s*[,;]\s*/', $pub['countries']);
-                                    $rendered_countries = [];
-                                    foreach ($c_parts as $c_part) {
-                                        $c_part = trim($c_part);
-                                        if (empty($c_part)) continue;
-                                        $c_flag = get_country_flag_url($c_part);
-                                        if ($c_flag) {
-                                            $rendered_countries[] = '<img src="' . $c_flag . '" style="width: 14px; height: 10px; border-radius: 1px; object-fit: cover; vertical-align: middle; margin-right: 2px; border: 1px solid rgba(255,255,255,0.1);" alt="" /> ' . htmlspecialchars($c_part);
-                                        } else {
-                                            $rendered_countries[] = htmlspecialchars($c_part);
-                                        }
-                                    }
-                                    echo implode(', ', $rendered_countries);
-                                    ?>
-                                </strong>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <?php if (!empty($pub['funding_sponsor'])): ?>
-                            <div style="font-size: 0.8rem; margin-bottom: 8px; color: var(--color-text-muted);">
-                                <i class="fa-solid fa-hand-holding-dollar" style="color: #10b981; width: 14px;"></i> แหล่งทุนวิจัย: <strong><?php echo htmlspecialchars($pub['funding_sponsor']); ?><?php echo !empty($pub['funding_no']) ? ' (' . htmlspecialchars($pub['funding_no']) . ')' : ''; ?></strong>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <?php if (!empty($pub['corresponding_author_name'])): ?>
-                            <div style="font-size: 0.8rem; margin-bottom: 8px; color: var(--color-text-muted);">
-                                <i class="fa-solid fa-envelope-circle-check" style="color: #f472b6; width: 14px;"></i> ผู้ประสานงาน (Corresponding Author): <strong><?php echo htmlspecialchars($pub['corresponding_author_name']); ?></strong>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <?php if (!empty($pub['abstract'])): ?>
-                            <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 15px; line-height: 1.5; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px; border-left: 3px solid var(--color-primary);">
-                                <strong>บทคัดย่อ (Abstract):</strong> <?php echo htmlspecialchars(mb_strimwidth($pub['abstract'], 0, 300, '...')); ?>
-                            </div>
-                        <?php endif; ?>
+        <!-- Profile Navigation Tabs -->
+        <div style="display: flex; gap: 10px; margin-bottom: 22px; border-bottom: 1px solid var(--border-glass); padding-bottom: 14px; flex-wrap: wrap;">
+            <button type="button" class="profile-tab-btn active" id="tab-btn-publications" onclick="switchProfileTab('publications')">
+                <i class="fa-solid fa-book-open"></i> ผลงานตีพิมพ์ (<?php echo count($publications); ?> เรื่อง)
+            </button>
+            <button type="button" class="profile-tab-btn" id="tab-btn-grants" onclick="switchProfileTab('grants')">
+                <i class="fa-solid fa-hand-holding-dollar"></i> โครงการทุนวิจัย (<?php echo count($researcher_grants); ?> ทุน)
+            </button>
+            <?php if (!empty($corresponding_publications)): ?>
+                <button type="button" class="profile-tab-btn" id="tab-btn-corresponding" onclick="switchProfileTab('corresponding')">
+                    <i class="fa-solid fa-envelope-open-text"></i> ผู้แต่งประสานงาน (<?php echo count($corresponding_publications); ?> เรื่อง)
+                </button>
+            <?php endif; ?>
+        </div>
 
-                        <div class="pub-footer">
-                            <div class="pub-tags">
-                                <span class="pub-source-badge source-<?php echo strtolower($pub['source']); ?>">
-                                    <?php echo htmlspecialchars($pub['source']); ?>
-                                </span>
-                                <?php if (!empty($pub['doi'])): ?>
-                                    <span class="badge">
-                                        DOI: <?php echo htmlspecialchars($pub['doi']); ?>
-                                    </span>
-                                <?php endif; ?>
-                                <?php if (!empty($pub['quartile'])): ?>
-                                    <?php 
-                                        $q_color = '#ef4444';
-                                        $q_bg = 'rgba(239, 68, 68, 0.15)';
-                                        if ($pub['quartile'] === 'Q1') { $q_color = '#10b981'; $q_bg = 'rgba(16, 185, 129, 0.15)'; }
-                                        elseif ($pub['quartile'] === 'Q2') { $q_color = '#3b82f6'; $q_bg = 'rgba(59, 130, 246, 0.15)'; }
-                                        elseif ($pub['quartile'] === 'Q3') { $q_color = '#f59e0b'; $q_bg = 'rgba(245, 158, 11, 0.15)'; }
-                                    ?>
-                                    <span class="badge" style="background: <?php echo $q_bg; ?>; color: <?php echo $q_color; ?>; border: 1px solid <?php echo $q_color; ?>44; font-weight: 700;">
-                                        <?php echo $pub['quartile']; ?>
-                                    </span>
-                                <?php endif; ?>
-                                <?php 
-                                $role = determine_author_role($pub['authors'], $researcher['first_name_en'], $researcher['last_name_en']);
-                                $role_class = ($role === 'First Author') 
-                                    ? 'background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);' 
-                                    : 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);';
-                                ?>
-                                <span class="badge" style="<?php echo $role_class; ?> font-weight: 600;">
-                                    <?php echo htmlspecialchars($role); ?>
-                                </span>
-                                <?php echo render_effective_sdg_badges($pub); ?>
-                                <?php echo render_rcr_badge($pub['rcr'] ?? null, $pub['nih_percentile'] ?? null); ?>
+        <!-- Tab 1: Publications List -->
+        <div id="section-publications" class="profile-tab-section">
+            <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-book" style="color: var(--color-primary);"></i> รายการผลงานสิ่งตีพิมพ์ (<?php echo count($publications); ?> รายการ)
+            </h3>
+            
+            <div class="publications-list">
+                <?php if (empty($publications)): ?>
+                    <div class="glass-panel" style="padding: 40px; text-align: center; color: var(--color-text-muted);">
+                        <i class="fa-regular fa-folder-open" style="font-size: 3rem; margin-bottom: 16px; display: block;"></i>
+                        ยังไม่มีผลงานตีพิมพ์วิชาการของนักวิจัยท่านนี้ในระบบ
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($publications as $pub): ?>
+                        <div class="glass-panel publication-card searchable-item animate-fade-in">
+                            <div class="pub-title"><?php echo htmlspecialchars($pub['title']); ?></div>
+                            <div class="pub-authors">ผู้แต่ง: <?php echo htmlspecialchars($pub['authors']); ?></div>
+                            
+                            <div class="pub-journal">
+                                <i class="fa-solid fa-journal-whills"></i> <?php echo htmlspecialchars($pub['journal_name'] ?? 'ไม่ระบุวารสาร'); ?> (<?php echo $pub['publish_year']; ?>)
                             </div>
                             
-                            <div style="display: flex; gap: 15px; align-items: center;">
-                                <span class="pub-citations">
-                                    <i class="fa-solid fa-quote-right"></i> Cited by: <?php echo (int)$pub['citation_count']; ?>
+                            <?php if (!empty($pub['countries'])): ?>
+                                <div style="font-size: 0.8rem; margin-bottom: 8px; color: var(--color-text-muted); display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                                    <i class="fa-solid fa-earth-americas" style="color: #60a5fa; width: 14px;"></i> ประเทศร่วมวิจัย: 
+                                    <strong>
+                                        <?php 
+                                        $c_parts = preg_split('/\s*[,;]\s*/', $pub['countries']);
+                                        $rendered_countries = [];
+                                        foreach ($c_parts as $c_part) {
+                                            $c_part = trim($c_part);
+                                            if (empty($c_part)) continue;
+                                            $c_flag = get_country_flag_url($c_part);
+                                            if ($c_flag) {
+                                                $rendered_countries[] = '<img src="' . $c_flag . '" style="width: 14px; height: 10px; border-radius: 1px; object-fit: cover; vertical-align: middle; margin-right: 2px; border: 1px solid rgba(255,255,255,0.1);" alt="" /> ' . htmlspecialchars($c_part);
+                                            } else {
+                                                $rendered_countries[] = htmlspecialchars($c_part);
+                                            }
+                                        }
+                                        echo implode(', ', $rendered_countries);
+                                        ?>
+                                    </strong>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($pub['funding_sponsor'])): ?>
+                                <div style="font-size: 0.8rem; margin-bottom: 8px; color: var(--color-text-muted);">
+                                    <i class="fa-solid fa-hand-holding-dollar" style="color: #10b981; width: 14px;"></i> แหล่งทุนวิจัย: <strong><?php echo htmlspecialchars($pub['funding_sponsor']); ?><?php echo !empty($pub['funding_no']) ? ' (' . htmlspecialchars($pub['funding_no']) . ')' : ''; ?></strong>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($pub['corresponding_author_name'])): ?>
+                                <div style="font-size: 0.8rem; margin-bottom: 8px; color: var(--color-text-muted);">
+                                    <i class="fa-solid fa-envelope-circle-check" style="color: #f472b6; width: 14px;"></i> ผู้ประสานงาน (Corresponding Author): <strong><?php echo htmlspecialchars($pub['corresponding_author_name']); ?></strong>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($pub['abstract'])): ?>
+                                <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 15px; line-height: 1.5; background: rgba(0,0,0,0.1); padding: 10px; border-radius: 8px; border-left: 3px solid var(--color-primary);">
+                                    <strong>บทคัดย่อ (Abstract):</strong> <?php echo htmlspecialchars(mb_strimwidth($pub['abstract'], 0, 300, '...')); ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="pub-footer">
+                                <div class="pub-tags">
+                                    <span class="pub-source-badge source-<?php echo strtolower($pub['source']); ?>">
+                                        <?php echo htmlspecialchars($pub['source']); ?>
+                                    </span>
+                                    <?php if (!empty($pub['doi'])): ?>
+                                        <span class="badge">
+                                            DOI: <?php echo htmlspecialchars($pub['doi']); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($pub['quartile'])): ?>
+                                        <?php 
+                                            $q_color = '#ef4444';
+                                            $q_bg = 'rgba(239, 68, 68, 0.15)';
+                                            if ($pub['quartile'] === 'Q1') { $q_color = '#10b981'; $q_bg = 'rgba(16, 185, 129, 0.15)'; }
+                                            elseif ($pub['quartile'] === 'Q2') { $q_color = '#3b82f6'; $q_bg = 'rgba(59, 130, 246, 0.15)'; }
+                                            elseif ($pub['quartile'] === 'Q3') { $q_color = '#f59e0b'; $q_bg = 'rgba(245, 158, 11, 0.15)'; }
+                                        ?>
+                                        <span class="badge" style="background: <?php echo $q_bg; ?>; color: <?php echo $q_color; ?>; border: 1px solid <?php echo $q_color; ?>44; font-weight: 700;">
+                                            <?php echo $pub['quartile']; ?>
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php 
+                                    $role = determine_author_role($pub['authors'], $researcher['first_name_en'], $researcher['last_name_en']);
+                                    $role_class = ($role === 'First Author') 
+                                        ? 'background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);' 
+                                        : 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);';
+                                    ?>
+                                    <span class="badge" style="<?php echo $role_class; ?> font-weight: 600;">
+                                        <?php echo htmlspecialchars($role); ?>
+                                    </span>
+                                    <?php echo render_effective_sdg_badges($pub); ?>
+                                    <?php echo render_rcr_badge($pub['rcr'] ?? null, $pub['nih_percentile'] ?? null); ?>
+                                </div>
+                                
+                                <div style="display: flex; gap: 15px; align-items: center;">
+                                    <span class="pub-citations">
+                                        <i class="fa-solid fa-quote-right"></i> Cited by: <?php echo (int)$pub['citation_count']; ?>
+                                    </span>
+                                    <?php if (!empty($pub['url'])): ?>
+                                        <a href="<?php echo htmlspecialchars($pub['url']); ?>" target="_blank" class="btn-premium" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 500;">
+                                            <i class="fa-solid fa-external-link"></i> ลิงก์ภายนอก
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Tab 2: Research Grants List -->
+        <div id="section-grants" class="profile-tab-section" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-hand-holding-dollar" style="color: #10b981;"></i> โครงการทุนวิจัยและผลผลิตทางวิชาการ (<?php echo count($researcher_grants); ?> โครงการ)
+                </h3>
+                <span style="font-size: 0.8rem; color: var(--color-text-muted);">
+                    วิเคราะห์ผลงานตีพิมพ์ บทบาทผู้แต่ง และการอ้างอิงสะสมที่เกิดจากแต่ละทุนวิจัย
+                </span>
+            </div>
+
+            <?php if (empty($researcher_grants)): ?>
+                <div class="glass-panel" style="padding: 50px 20px; text-align: center; color: var(--color-text-muted);">
+                    <i class="fa-solid fa-file-invoice-dollar" style="font-size: 3rem; margin-bottom: 16px; opacity: 0.3; display: block;"></i>
+                    <h4 style="font-size: 1.05rem; color: var(--color-text-main); margin-bottom: 6px;">ยังไม่มีข้อมูลโครงการทุนวิจัยที่ระบุรหัสสัญญาในระบบ</h4>
+                    <p style="font-size: 0.85rem; max-width: 420px; margin: 0 auto;">ข้อมูลทุนวิจัยจะแสดงเมื่อมีผลงานตีพิมพ์ที่ระบุเลขที่สัญญา/รหัสทุน (Funding Number)</p>
+                </div>
+            <?php else: ?>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <?php foreach ($researcher_grants as $g): 
+                        $paper_count = count($g['papers']);
+                        $is_multi = $paper_count > 1;
+                    ?>
+                        <div class="glass-panel searchable-item profile-grant-card" style="<?php echo $is_multi ? 'border-left: 4px solid #10b981;' : ''; ?>">
+                            <!-- Grant Header -->
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 12px;">
+                                <div style="flex: 2; min-width: 260px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+                                        <span style="font-size: 1.1rem; font-weight: 700; font-family: var(--font-eng); color: #34d399;">
+                                            <i class="fa-solid fa-file-signature" style="color: #10b981; margin-right: 4px;"></i>
+                                            <?php echo htmlspecialchars($g['funding_no']); ?>
+                                        </span>
+                                        <?php if ($paper_count >= 3): ?>
+                                            <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); font-size: 0.7rem; font-weight: 600;">
+                                                <i class="fa-solid fa-fire"></i> ผลิตภาพสูง (&ge; 3 เรื่อง)
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div style="font-size: 0.88rem; color: var(--color-text-main); font-weight: 500;">
+                                        <i class="fa-solid fa-building-columns" style="font-size: 0.75rem; color: var(--color-text-muted); margin-right: 4px;"></i>
+                                        <?php echo htmlspecialchars($g['funding_sponsor']); ?>
+                                    </div>
+                                </div>
+
+                                <!-- Top Badges & Actions -->
+                                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                        <span class="badge" style="background: rgba(255,255,255,0.06); font-size: 0.75rem; font-weight: 600;">
+                                            <i class="fa-solid fa-book" style="margin-right: 4px; color: var(--color-secondary);"></i> <?php echo $paper_count; ?> ฉบับ
+                                        </span>
+                                        <?php if ($g['total_citations'] > 0): ?>
+                                            <span class="badge" style="background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.25); font-size: 0.75rem; font-weight: 600;">
+                                                <i class="fa-solid fa-quote-right" style="margin-right: 4px;"></i> <?php echo number_format($g['total_citations']); ?> Citations
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <a href="grants.php?search=<?php echo urlencode($g['funding_no']); ?>" target="_blank" class="btn-premium" style="padding: 6px 12px; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="ดูรายงานทุนนี้ในระดับคณะ">
+                                        <span>ดูภาพรวมทุน</span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.65rem;"></i>
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Role Summary in this Grant -->
+                            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; font-size: 0.78rem;">
+                                <span style="color: var(--color-text-muted); font-weight: 500;">
+                                    <i class="fa-solid fa-user-tag" style="color: #a78bfa; margin-right: 3px;"></i> บทบาทในทุนนี้:
                                 </span>
-                                <?php if (!empty($pub['url'])): ?>
-                                    <a href="<?php echo htmlspecialchars($pub['url']); ?>" target="_blank" class="btn-premium" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 500;">
-                                        <i class="fa-solid fa-external-link"></i> ลิงก์ภายนอก
+                                <?php if ($g['roles_count']['First'] > 0): ?>
+                                    <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.35); font-size: 0.72rem; font-weight: 600;">
+                                        <i class="fa-solid fa-star" style="font-size: 0.65rem; margin-right: 3px;"></i> First Author: <?php echo $g['roles_count']['First']; ?> เรื่อง
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($g['roles_count']['Corresponding'] > 0): ?>
+                                    <span class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.35); font-size: 0.72rem; font-weight: 600;">
+                                        <i class="fa-solid fa-envelope" style="font-size: 0.65rem; margin-right: 3px;"></i> Corresponding: <?php echo $g['roles_count']['Corresponding']; ?> เรื่อง
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($g['roles_count']['CoAuthor'] > 0): ?>
+                                    <span class="badge" style="background: rgba(139,92,246,0.12); color: #c084fc; border: 1px solid rgba(139,92,246,0.25); font-size: 0.72rem; font-weight: 600;">
+                                        <i class="fa-solid fa-user-group" style="font-size: 0.65rem; margin-right: 3px;"></i> Co-Author: <?php echo $g['roles_count']['CoAuthor']; ?> เรื่อง
+                                    </span>
+                                <?php endif; ?>
+
+                                <!-- Quartiles breakdown -->
+                                <span style="margin-left: auto; display: inline-flex; gap: 4px;">
+                                    <?php if ($g['q_counts']['Q1'] > 0): ?>
+                                        <span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; font-size: 0.7rem; font-weight: 700; padding: 2px 6px;">Q1: <?php echo $g['q_counts']['Q1']; ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($g['q_counts']['Q2'] > 0): ?>
+                                        <span class="badge" style="background: rgba(59,130,246,0.15); color: #3b82f6; font-size: 0.7rem; font-weight: 700; padding: 2px 6px;">Q2: <?php echo $g['q_counts']['Q2']; ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($g['q_counts']['Q3'] > 0): ?>
+                                        <span class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b; font-size: 0.7rem; font-weight: 700; padding: 2px 6px;">Q3: <?php echo $g['q_counts']['Q3']; ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($g['q_counts']['Q4'] > 0): ?>
+                                        <span class="badge" style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.7rem; font-weight: 700; padding: 2px 6px;">Q4: <?php echo $g['q_counts']['Q4']; ?></span>
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+
+                            <!-- Papers List under this grant -->
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <?php foreach ($g['papers'] as $p_item): 
+                                    $role = $p_item['my_role'];
+                                    if (strpos($role, 'First') !== false) {
+                                        $r_bg = 'rgba(16, 185, 129, 0.14)';
+                                        $r_color = '#10b981';
+                                        $r_border = 'rgba(16, 185, 129, 0.35)';
+                                        $r_icon = 'fa-solid fa-star';
+                                    } elseif (strpos($role, 'Corresponding') !== false) {
+                                        $r_bg = 'rgba(245, 158, 11, 0.14)';
+                                        $r_color = '#f59e0b';
+                                        $r_border = 'rgba(245, 158, 11, 0.35)';
+                                        $r_icon = 'fa-solid fa-envelope';
+                                    } else {
+                                        $r_bg = 'rgba(139, 92, 246, 0.1)';
+                                        $r_color = '#c084fc';
+                                        $r_border = 'rgba(139, 92, 246, 0.25)';
+                                        $r_icon = 'fa-solid fa-user-group';
+                                    }
+                                ?>
+                                    <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+                                        <div style="flex: 1; min-width: 240px;">
+                                            <div style="font-size: 0.88rem; font-weight: 600; line-height: 1.4; margin-bottom: 4px;">
+                                                <?php if (!empty($p_item['url'])): ?>
+                                                    <a href="<?php echo htmlspecialchars($p_item['url']); ?>" target="_blank" style="color: inherit; text-decoration: none;" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
+                                                        <?php echo htmlspecialchars($p_item['title']); ?>
+                                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.68rem; margin-left: 3px; opacity: 0.7;"></i>
+                                                    </a>
+                                                <?php elseif (!empty($p_item['doi'])): ?>
+                                                    <a href="https://doi.org/<?php echo htmlspecialchars($p_item['doi']); ?>" target="_blank" style="color: inherit; text-decoration: none;" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color='inherit'">
+                                                        <?php echo htmlspecialchars($p_item['title']); ?>
+                                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.68rem; margin-left: 3px; opacity: 0.7;"></i>
+                                                    </a>
+                                                <?php else: ?>
+                                                    <?php echo htmlspecialchars($p_item['title']); ?>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div style="font-size: 0.75rem; color: var(--color-text-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                                <span><i class="fa-solid fa-book" style="color: var(--color-secondary); margin-right: 3px;"></i> <?php echo htmlspecialchars($p_item['journal_name'] ?: 'N/A'); ?> (<?php echo $p_item['publish_year']; ?>)</span>
+                                                <?php if ($p_item['citation_count'] > 0): ?>
+                                                    <span>&bull;</span>
+                                                    <span style="color: #fbbf24;"><i class="fa-solid fa-quote-right" style="margin-right: 2px;"></i> Cited: <?php echo (int)$p_item['citation_count']; ?></span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($p_item['rcr'])): ?>
+                                                    <span>&bull;</span>
+                                                    <span style="color: #10b981;">RCR: <?php echo $p_item['rcr']; ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right: Quartile & Role Badges -->
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <?php if (!empty($p_item['quartile'])): 
+                                                $q_color = '#ef4444';
+                                                $q_bg = 'rgba(239, 68, 68, 0.15)';
+                                                if ($p_item['quartile'] === 'Q1') { $q_color = '#10b981'; $q_bg = 'rgba(16, 185, 129, 0.15)'; }
+                                                elseif ($p_item['quartile'] === 'Q2') { $q_color = '#3b82f6'; $q_bg = 'rgba(59, 130, 246, 0.15)'; }
+                                                elseif ($p_item['quartile'] === 'Q3') { $q_color = '#f59e0b'; $q_bg = 'rgba(245, 158, 11, 0.15)'; }
+                                            ?>
+                                                <span class="badge" style="background: <?php echo $q_bg; ?>; color: <?php echo $q_color; ?>; border: 1px solid <?php echo $q_color; ?>44; font-weight: 700; font-size: 0.72rem; padding: 2px 7px;">
+                                                    <?php echo $p_item['quartile']; ?>
+                                                </span>
+                                            <?php endif; ?>
+
+                                            <span class="badge" style="background: <?php echo $r_bg; ?>; color: var(--color-text-main); border: 1px solid <?php echo $r_border; ?>; font-size: 0.72rem; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="<?php echo $r_icon; ?>" style="font-size: 0.65rem; color: <?php echo $r_color; ?>;"></i>
+                                                <strong style="color: <?php echo $r_color; ?>;"><?php echo $role; ?></strong>
+                                            </span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Tab 3: Corresponding Author Section (If any) -->
+        <?php if (!empty($corresponding_publications)): ?>
+            <div id="section-corresponding" class="profile-tab-section" style="display: none;">
+                <h3 style="margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-envelope-open-text" style="color: var(--color-secondary);"></i> ผลงานในฐานะผู้แต่งประสานงาน (Corresponding Author - <?php echo count($corresponding_publications); ?> รายการ)
+                </h3>
+                <div class="publications-list">
+                    <?php foreach ($corresponding_publications as $cpub): ?>
+                        <div class="glass-panel publication-card searchable-item animate-fade-in" style="border-left: 3px solid var(--color-secondary);">
+                            <div class="pub-title"><?php echo htmlspecialchars($cpub['title']); ?></div>
+                            <div class="pub-authors">ผู้แต่ง: <?php echo htmlspecialchars($cpub['authors']); ?></div>
+                            <div class="pub-footer" style="margin-top: 15px;">
+                                <div class="pub-tags">
+                                    <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: var(--color-primary); border: 1px solid rgba(139, 92, 246, 0.3); font-weight: 600;">
+                                        Corresponding Author
+                                    </span>
+                                </div>
+                                <?php if (!empty($cpub['url'])): ?>
+                                    <a href="<?php echo htmlspecialchars($cpub['url']); ?>" target="_blank" class="btn-premium" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 500; background: linear-gradient(135deg, var(--color-secondary), #b45309);">
+                                        <i class="fa-solid fa-external-link"></i> ลิงก์ปลายทาง
                                     </a>
                                 <?php endif; ?>
                             </div>
                         </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
-        <!-- Corresponding Author Section (If any) -->
-        <?php if (!empty($corresponding_publications)): ?>
-            <h3 style="margin-top: 40px; margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-envelope-open-text" style="color: var(--color-secondary);"></i> ผลงานในฐานะผู้แต่งประสานงาน (Corresponding Author)
-            </h3>
-            <div class="publications-list">
-                <?php foreach ($corresponding_publications as $cpub): ?>
-                    <div class="glass-panel publication-card searchable-item animate-fade-in" style="border-left: 3px solid var(--color-secondary);">
-                        <div class="pub-title"><?php echo htmlspecialchars($cpub['title']); ?></div>
-                        <div class="pub-authors">ผู้แต่ง: <?php echo htmlspecialchars($cpub['authors']); ?></div>
-                        <div class="pub-footer" style="margin-top: 15px;">
-                            <div class="pub-tags">
-                                <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: var(--color-primary); border: 1px solid rgba(139, 92, 246, 0.3); font-weight: 600;">
-                                    Corresponding Author
-                                </span>
-                            </div>
-                            <?php if (!empty($cpub['url'])): ?>
-                                <a href="<?php echo htmlspecialchars($cpub['url']); ?>" target="_blank" class="btn-premium" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 500; background: linear-gradient(135deg, var(--color-secondary), #b45309);">
-                                    <i class="fa-solid fa-external-link"></i> ลิงก์ปลายทาง
-                                </a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
+                    <?php endforeach; ?>
+                </div>
             </div>
         <?php endif; ?>
     </div>
 </div>
 
 <script>
+function switchProfileTab(tabName) {
+    document.querySelectorAll('.profile-tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.profile-tab-section').forEach(sec => sec.style.display = 'none');
+
+    const targetBtn = document.getElementById('tab-btn-' + tabName);
+    const targetSec = document.getElementById('section-' + tabName);
+    if (targetBtn && targetSec) {
+        targetBtn.classList.add('active');
+        targetSec.style.display = 'block';
+    }
+    if (history.replaceState) {
+        history.replaceState(null, null, '#' + tabName);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Check URL query param or hash to restore active tab
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    const hash = window.location.hash.replace('#', '');
+    const activeTab = tabParam || hash;
+    if (activeTab && document.getElementById('tab-btn-' + activeTab)) {
+        switchProfileTab(activeTab);
+    }
+
     // Researcher Yearly Chart
     const ctx = document.getElementById('researcherYearlyChart');
     if (ctx) {
