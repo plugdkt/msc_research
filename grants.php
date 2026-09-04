@@ -185,19 +185,16 @@ include_once __DIR__ . '/includes/header.php';
 ?>
 
 <!-- Hero / Page Header -->
-<div class="hero glass-panel animate-fade-in" style="padding: 30px 24px; margin-bottom: 30px; position: relative; overflow: hidden;">
-        <div>
-            <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; color: #10b981; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); border-radius: 999px; padding: 4px 12px; margin-bottom: 12px;">
-                <i class="fa-solid fa-hand-holding-dollar"></i> Grant Output &amp; ROI Tracker
-            </div>
-            <h2 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 8px;">
-                ระบบติดตามผลผลิตโครงการวิจัย (Grant Outputs)
-            </h2>
-            <p style="color: var(--color-text-muted); font-size: 0.95rem; margin: 0; line-height: 1.6; max-width: 850px;">
-                วิเคราะห์ผลิตภาพทางวิชาการและผลตอบแทนต่อเงินทุน (Research ROI) เจาะลึกรายรหัสสัญญาโครงการวิจัย ตรวจสอบจำนวนผลงานตีพิมพ์ สัดส่วนระดับ Quartile (Q1–Q4) และการอ้างอิงสะสมที่เกิดจากแต่ละทุนวิจัย
-            </p>
-        </div>
+<div class="hero glass-panel animate-fade-in" style="padding: 36px 24px; margin-bottom: 30px; position: relative; overflow: hidden; text-align: center;">
+    <div style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; color: #10b981; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); border-radius: 999px; padding: 5px 16px; margin-bottom: 14px;">
+        <i class="fa-solid fa-hand-holding-dollar"></i> Grant Output &amp; ROI Tracker
     </div>
+    <h2 style="font-size: 1.9rem; font-weight: 700; margin-bottom: 12px; color: var(--color-text-main);">
+        ระบบติดตามผลผลิตโครงการวิจัย (Grant Outputs)
+    </h2>
+    <p style="color: var(--color-text-muted); font-size: 0.96rem; margin: 0 auto; line-height: 1.7; max-width: 820px;">
+        วิเคราะห์ผลิตภาพทางวิชาการและผลตอบแทนต่อเงินทุน (Research ROI) เจาะลึกรายรหัสสัญญาโครงการวิจัย ตรวจสอบจำนวนผลงานตีพิมพ์ สัดส่วนระดับ Quartile (Q1–Q4) และการอ้างอิงสะสมที่เกิดจากแต่ละทุนวิจัย
+    </p>
 </div>
 
 <!-- Stats Grid: Key Grant Metrics -->
@@ -262,24 +259,40 @@ include_once __DIR__ . '/includes/header.php';
 <!-- Search & Filter Controls -->
 <div class="glass-panel animate-fade-in" style="padding: 24px; margin-bottom: 30px;">
     <form method="GET" action="grants.php" style="display: flex; flex-direction: column; gap: 16px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; align-items: flex-end;">
-            <!-- Text Search -->
-            <div style="flex: 2; min-width: 250px;">
-                <label style="font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 6px;">
-                    <i class="fa-solid fa-magnifying-glass"></i> ค้นหารหัสทุน / สัญญา / ชื่ออาจารย์ / หน่วยงาน
-                </label>
-                <div style="position: relative;">
-                    <input type="text" name="search" class="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="เช่น 2260/2568, FF64, University of Phayao..." style="padding-left: 36px; width: 100%;">
-                    <i class="fa-solid fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); font-size: 0.85rem;"></i>
+        <!-- Top Row: Search Bar & Actions -->
+        <div>
+            <label style="font-size: 0.82rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 8px;">
+                <i class="fa-solid fa-magnifying-glass" style="color: var(--color-primary);"></i> ค้นหารหัสทุน / สัญญา / ชื่ออาจารย์ / หน่วยงานผู้มอบทุน
+            </label>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <div style="position: relative; flex: 1; min-width: 260px;">
+                    <input type="text" name="search" class="search-input" value="<?php echo htmlspecialchars($search); ?>" placeholder="พิมพ์ค้นหา เช่น 2260/2568, FF64, University of Phayao, ชื่อผู้วิจัย..." style="padding-left: 38px; width: 100%; height: 44px; font-size: 0.92rem;">
+                    <i class="fa-solid fa-search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); font-size: 0.9rem;"></i>
+                    <?php if ($search !== ''): ?>
+                        <a href="grants.php?<?php echo http_build_query(array_merge($_GET, ['search' => ''])); ?>" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--color-text-muted); text-decoration: none;" title="ล้างคำค้นหา">
+                            <i class="fa-solid fa-circle-xmark"></i>
+                        </a>
+                    <?php endif; ?>
                 </div>
+                <button type="submit" class="btn-premium" style="padding: 0 24px; height: 44px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;">
+                    <i class="fa-solid fa-filter"></i> กรองข้อมูล
+                </button>
+                <?php if ($search !== '' || $selected_sponsor !== '' || $selected_quartile !== '' || $sort !== 'pubs_desc'): ?>
+                    <a href="grants.php" class="btn-premium" style="padding: 0 16px; height: 44px; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: var(--color-text-muted); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;" title="ล้างตัวกรองทั้งหมด">
+                        <i class="fa-solid fa-rotate-left"></i> ล้างตัวกรอง
+                    </a>
+                <?php endif; ?>
             </div>
+        </div>
 
+        <!-- Bottom Row: Dropdown Filters -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; padding-top: 14px; border-top: 1px dashed rgba(255,255,255,0.1);">
             <!-- Sponsor Select -->
             <div>
                 <label style="font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 6px;">
                     <i class="fa-solid fa-building-columns"></i> หน่วยงานผู้มอบทุน
                 </label>
-                <select name="sponsor" class="search-input" style="width: 100%; height: 42px;">
+                <select name="sponsor" class="search-input" style="width: 100%; height: 42px; cursor: pointer;" onchange="this.form.submit()">
                     <option value="">-- ทั้งหมดทุกแหล่งทุน --</option>
                     <?php foreach ($sponsors_list as $sp): ?>
                         <option value="<?php echo htmlspecialchars($sp); ?>" <?php echo $selected_sponsor === $sp ? 'selected' : ''; ?>>
@@ -294,7 +307,7 @@ include_once __DIR__ . '/includes/header.php';
                 <label style="font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 6px;">
                     <i class="fa-solid fa-chart-pie"></i> ระดับ Quartile
                 </label>
-                <select name="quartile" class="search-input" style="width: 100%; height: 42px;">
+                <select name="quartile" class="search-input" style="width: 100%; height: 42px; cursor: pointer;" onchange="this.form.submit()">
                     <option value="">-- ทั้งหมดทุกระดับ --</option>
                     <option value="Q1_Q2" <?php echo $selected_quartile === 'Q1_Q2' ? 'selected' : ''; ?>>เฉพาะมีผลงาน Q1 หรือ Q2</option>
                     <option value="Q1"    <?php echo $selected_quartile === 'Q1' ? 'selected' : ''; ?>>เฉพาะมีผลงาน Q1</option>
@@ -307,24 +320,12 @@ include_once __DIR__ . '/includes/header.php';
                 <label style="font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 6px;">
                     <i class="fa-solid fa-arrow-down-wide-short"></i> เรียงลำดับตาม
                 </label>
-                <select name="sort" class="search-input" style="width: 100%; height: 42px;">
+                <select name="sort" class="search-input" style="width: 100%; height: 42px; cursor: pointer;" onchange="this.form.submit()">
                     <option value="pubs_desc" <?php echo $sort === 'pubs_desc' ? 'selected' : ''; ?>>จำนวนผลงาน (มาก &rarr; น้อย)</option>
                     <option value="cits_desc" <?php echo $sort === 'cits_desc' ? 'selected' : ''; ?>>การอ้างอิง Citations (มาก &rarr; น้อย)</option>
                     <option value="rcr_desc"  <?php echo $sort === 'rcr_desc' ? 'selected' : ''; ?>>ค่า RCR เฉลี่ย (มาก &rarr; น้อย)</option>
                     <option value="no_asc"    <?php echo $sort === 'no_asc' ? 'selected' : ''; ?>>รหัสทุน (A &rarr; Z)</option>
                 </select>
-            </div>
-
-            <!-- Submit Buttons -->
-            <div style="display: flex; gap: 8px;">
-                <button type="submit" class="btn-premium" style="padding: 10px 18px; height: 42px; font-weight: 600; flex: 1; justify-content: center;">
-                    <i class="fa-solid fa-filter"></i> กรองข้อมูล
-                </button>
-                <?php if ($search !== '' || $selected_sponsor !== '' || $selected_quartile !== '' || $sort !== 'pubs_desc'): ?>
-                    <a href="grants.php" class="btn-premium" style="padding: 10px 14px; height: 42px; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: var(--color-text-muted); text-decoration: none; display: inline-flex; align-items: center; justify-content: center;" title="ล้างตัวกรอง">
-                        <i class="fa-solid fa-xmark"></i>
-                    </a>
-                <?php endif; ?>
             </div>
         </div>
     </form>
