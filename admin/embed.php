@@ -238,8 +238,8 @@ $system_url = $protocol . $host . $base_dir;
         </div>
 
         <!-- Live Preview Frame Container -->
-        <div class="preview-frame-wrapper" id="preview-wrapper" style="min-height: 380px; margin-bottom: 24px;">
-            <iframe id="embed-preview-frame" src="" width="100%" height="450" frameborder="0" style="border: none; display: block; transition: height 0.2s;"></iframe>
+        <div class="preview-frame-wrapper" id="preview-wrapper" style="min-height: 250px; margin-bottom: 24px;">
+            <iframe id="embed-preview-frame" src="" width="100%" height="350" frameborder="0" style="border: none; display: block;"></iframe>
         </div>
 
         <!-- Generated Embed Code Box -->
@@ -368,8 +368,12 @@ function copyEmbedCode() {
 window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'msc-widget-resize') {
         const iframe = document.getElementById('embed-preview-frame');
-        if (iframe && event.data.height > 50) {
-            iframe.style.height = (parseInt(event.data.height, 10) + 15) + 'px';
+        const targetHeight = parseInt(event.data.height, 10);
+        if (iframe && targetHeight > 40) {
+            const currentHeight = parseInt(iframe.style.height, 10) || iframe.offsetHeight;
+            if (Math.abs(currentHeight - targetHeight) >= 2) {
+                iframe.style.height = targetHeight + 'px';
+            }
         }
     }
 });

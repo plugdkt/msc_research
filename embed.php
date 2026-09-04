@@ -147,10 +147,16 @@ $system_url = $protocol . $host . $base_dir;
             --color-accent: #3b82f6;
         }
 
-        * {
+        *, *::before, *::after {
             box-sizing: border-box;
+        }
+
+        html, body {
             margin: 0;
             padding: 0;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: hidden;
         }
 
         body {
@@ -158,7 +164,6 @@ $system_url = $protocol . $host . $base_dir;
             font-size: 14px;
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
-            overflow-x: hidden;
             background: transparent;
         }
 
@@ -575,33 +580,39 @@ $system_url = $protocol . $host . $base_dir;
     </div>
 </div>
 
-<!-- Auto-resize script to communicate with parent website -->
 <script>
+let lastSentHeight = 0;
 function notifyParentHeight() {
     try {
-        const height = document.documentElement.scrollHeight || document.body.scrollHeight;
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({
-                type: 'msc-widget-resize',
-                height: height
-            }, '*');
+        const container = document.querySelector('.widget-container') || document.body;
+        if (!container) return;
+        const height = Math.ceil(container.getBoundingClientRect().height);
+        if (height > 40 && Math.abs(height - lastSentHeight) >= 2) {
+            lastSentHeight = height;
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'msc-widget-resize',
+                    height: height
+                }, '*');
+            }
         }
     } catch (e) {
-        // Suppress any cross-origin notification issues
     }
 }
 
 window.addEventListener('load', () => {
     notifyParentHeight();
-    setTimeout(notifyParentHeight, 300);
-    setTimeout(notifyParentHeight, 1000);
+    setTimeout(notifyParentHeight, 200);
 });
 
-window.addEventListener('resize', notifyParentHeight);
+if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => notifyParentHeight());
+}
 
 if ('ResizeObserver' in window) {
+    const target = document.querySelector('.widget-container') || document.body;
     const ro = new ResizeObserver(() => notifyParentHeight());
-    ro.observe(document.body);
+    ro.observe(target);
 }
 </script>
 

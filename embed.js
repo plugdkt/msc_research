@@ -16,8 +16,12 @@
             var f = iframes[i];
             try {
                 if (f.contentWindow === event.source || (f.src && f.src.indexOf('embed.php') !== -1)) {
-                    if (event.data.height && event.data.height > 50) {
-                        f.style.height = (parseInt(event.data.height, 10) + 10) + 'px';
+                    var targetHeight = parseInt(event.data.height, 10);
+                    if (targetHeight && targetHeight > 40) {
+                        var currentHeight = parseInt(f.style.height, 10) || f.offsetHeight;
+                        if (Math.abs(currentHeight - targetHeight) >= 2) {
+                            f.style.height = targetHeight + 'px';
+                        }
                     }
                 }
             } catch (e) {}
