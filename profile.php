@@ -179,7 +179,8 @@ foreach ($publications as $pub) {
 }
 
 foreach ($researcher_grants as $k => &$rg) {
-    $rg['funding_sponsor'] = !empty($rg['sponsors']) ? implode(', ', $rg['sponsors']) : 'ไม่ระบุชื่อแหล่งทุน';
+    $rg['parsed_sponsors'] = parse_grant_sponsors($rg['sponsors']);
+    $rg['funding_sponsor'] = $rg['parsed_sponsors']['primary'];
 }
 unset($rg);
 
@@ -820,9 +821,8 @@ include_once __DIR__ . '/includes/header.php';
                                             </span>
                                         <?php endif; ?>
                                     </div>
-                                    <div style="font-size: 0.88rem; color: var(--color-text-main); font-weight: 500;">
-                                        <i class="fa-solid fa-building-columns" style="font-size: 0.75rem; color: var(--color-text-muted); margin-right: 4px;"></i>
-                                        <?php echo htmlspecialchars($g['funding_sponsor']); ?>
+                                    <div style="margin-top: 4px;">
+                                        <?php echo render_grant_sponsors_html($g['parsed_sponsors']); ?>
                                     </div>
                                 </div>
 

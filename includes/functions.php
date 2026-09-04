@@ -2411,3 +2411,144 @@ function render_sdg_badge($sdg_code, $is_primary = true, $font_size = '0.72rem')
         </span>';
     }
 }
+
+/**
+ * Parse and categorize raw funding sponsor names for a grant into
+ * Primary Funder, Co-Funders, and Host/Partner Institutions.
+ * Deduplicates sub-units (e.g. Faculty/Center under the same University).
+ *
+ * @param array|string $raw_sponsors Array of sponsor strings or comma-separated string
+ * @return array ['primary' => string, 'co_funders' => array, 'hosts' => array]
+ */
+function parse_grant_sponsors($raw_sponsors): array {
+    if (is_string($raw_sponsors)) {
+        $raw_sponsors = preg_split('/\s*[,;|]\s*/', $raw_sponsors);
+    }
+    if (!is_array($raw_sponsors)) {
+        $raw_sponsors = [];
+    }
+
+    $cleaned = [];
+    foreach ($raw_sponsors as $s) {
+        $s = trim($s);
+        if ($s === '') continue;
+        $cleaned[] = $s;
+    }
+    $cleaned = array_values(array_unique($cleaned));
+
+    if (empty($cleaned)) {
+        return [
+            'primary' => 'ไม่ระบุชื่อแหล่งทุนชัดเจน',
+            'co_funders' => [],
+            'hosts' => []
+        ];
+    }
+
+    // Collapse sub-units into parent universities if parent exists
+    $universities = [
+        'University of Phayao',
+        'Chiang Mai University',
+        'Khon Kaen University',
+        'Chulalongkorn University',
+        'Thammasat University',
+        'Naresuan University',
+        'Maejo University',
+        'Mahidol University',
+        'Prince of Songkla University',
+        'Kasetsart University'
+    ];
+
+    $deduped = [];
+    foreach ($cleaned as $item) {
+        $parent_found = null;
+        foreach ($universities as $u) {
+            if (stripos($item, $u) !== false) {
+                $parent_found = $u;
+                break;
+            }
+        }
+        $val = $parent_found ?: $item;
+        if (!in_array($val, $deduped)) {
+            $deduped[] = $val;
+        }
+    }
+
+    // Funder keywords vs Host/University keywords
+    $funder_keywords = [
+        'Council', 'Agency', 'Fund', 'Ministry', 'Innovation', 
+        'Foundation', 'Commission', 'Horizon', 'Trust', 'Institutes of Health',
+        'Higher Education', 'Research Promotion', 'Society', 'Promotion',
+        'สกสว', 'วช', 'สวทช', 'สวก', 'สกอ', 'อว'
+    ];
+
+    $funders = [];
+    $hosts = [];
+
+    foreach ($deduped as $org) {
+        $is_funder = false;
+        foreach ($funder_keywords as $kw) {
+            if (stripos($org, $kw) !== false) {
+                $is_funder = true;
+                break;
+            }
+        }
+        if ($is_funder) {
+            $funders[] = $org;
+        } else {
+            $hosts[] = $org;
+        }
+    }
+
+    if (!empty($funders)) {
+        $primary = array_shift($funders);
+        $co_funders = $funders;
+    } else {
+        $primary = array_shift($hosts);
+        $co_funders = [];
+    }
+
+    return [
+        'primary' => $primary,
+        'co_funders' => $co_funders,
+        'hosts' => $hosts
+    ];
+}
+
+/**
+ * Render Option A HTML for Grant Sponsors:
+ * Shows Primary Funder prominently, followed by Co-Funder badges (green) and Host/Partner badges (blue).
+ */
+function render_grant_sponsors_html($parsed_sponsors): string {
+    if (empty($parsed_sponsors) || empty($parsed_sponsors['primary'])) {
+        return '<span style="color: var(--color-text-muted);">ไม่ระบุชื่อแหล่งทุนชัดเจน</span>';
+    }
+
+    $html = '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; line-height: 1.4;">';
+    
+    // Primary Funder
+    $html .= '<div style="display: inline-flex; align-items: center; gap: 6px;">';
+    $html .= '<i class="fa-solid fa-building-columns" style="font-size: 0.8rem; color: var(--color-primary);"></i> ';
+    $html .= '<strong style="color: var(--color-text-main); font-size: 0.88rem;">' . htmlspecialchars($parsed_sponsors['primary']) . '</strong>';
+    $html .= '</div>';
+
+    // Co-Funders (if any)
+    if (!empty($parsed_sponsors['co_funders'])) {
+        foreach ($parsed_sponsors['co_funders'] as $cf) {
+            $html .= '<span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">';
+            $html .= '<i class="fa-solid fa-hand-holding-dollar" style="font-size: 0.65rem;"></i> ทุนร่วม: ' . htmlspecialchars($cf);
+            $html .= '</span>';
+        }
+    }
+
+    // Host / Partner Institutions (if any)
+    if (!empty($parsed_sponsors['hosts'])) {
+        foreach ($parsed_sponsors['hosts'] as $host) {
+            $html .= '<span class="badge" style="background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); font-size: 0.72rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">';
+            $html .= '<i class="fa-solid fa-landmark" style="font-size: 0.65rem;"></i> สถาบันแม่ข่าย/ร่วม: ' . htmlspecialchars($host);
+            $html .= '</span>';
+        }
+    }
+
+    $html .= '</div>';
+    return $html;
+}

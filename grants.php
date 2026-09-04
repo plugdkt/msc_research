@@ -385,9 +385,11 @@ include_once __DIR__ . '/includes/header.php';
                                 <?php endif; ?>
                             </div>
 
-                            <div style="font-size: 0.88rem; color: var(--color-text-main); font-weight: 500; margin-bottom: 8px;">
-                                <i class="fa-solid fa-building-columns" style="font-size: 0.75rem; color: var(--color-text-muted); margin-right: 4px;"></i>
-                                <?php echo htmlspecialchars($g['funding_sponsor'] ?: 'ไม่ระบุชื่อแหล่งทุนชัดเจน'); ?>
+                            <div style="margin-bottom: 8px;">
+                                <?php 
+                                $parsed_sp = parse_grant_sponsors($g['funding_sponsor']);
+                                echo render_grant_sponsors_html($parsed_sp); 
+                                ?>
                             </div>
 
                             <?php if (!empty($faculty_researchers)): ?>
