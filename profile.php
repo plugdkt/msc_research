@@ -119,14 +119,14 @@ usort($funding_summary, function ($a, $b) {
 });
 $funding_total_grants = array_sum(array_column($funding_summary, 'grant_count'));
 
-// Build structured Grant Outputs for this researcher
+// Build structured Grant Outputs for this researcher (Grouped strictly by distinct funding_no)
 $researcher_grants = [];
 foreach ($publications as $pub) {
     $f_no = trim($pub['funding_no'] ?? '');
     if ($f_no === '') continue;
 
-    $sponsor = trim($pub['funding_sponsor'] ?? '') ?: 'ไม่ระบุชื่อแหล่งทุน';
-    $grant_key = $f_no . '___' . $sponsor;
+    $grant_key = $f_no;
+    $raw_sponsor = trim($pub['funding_sponsor'] ?? '');
 
     $role = determine_author_role($pub['authors'], $researcher['first_name_en'], $researcher['last_name_en']);
     $is_corr = (!empty($pub['corresponding_author_id']) && (int)$pub['corresponding_author_id'] === (int)$researcher_id);
@@ -144,12 +144,17 @@ foreach ($publications as $pub) {
     if (!isset($researcher_grants[$grant_key])) {
         $researcher_grants[$grant_key] = [
             'funding_no' => $f_no,
-            'funding_sponsor' => $sponsor,
+            'sponsors' => [],
+            'funding_sponsor' => '',
             'total_citations' => 0,
             'q_counts' => ['Q1' => 0, 'Q2' => 0, 'Q3' => 0, 'Q4' => 0, 'Other' => 0],
             'roles_count' => ['First' => 0, 'Corresponding' => 0, 'CoAuthor' => 0],
             'papers' => []
         ];
+    }
+
+    if ($raw_sponsor !== '' && !in_array($raw_sponsor, $researcher_grants[$grant_key]['sponsors'])) {
+        $researcher_grants[$grant_key]['sponsors'][] = $raw_sponsor;
     }
 
     $pub_copy = $pub;
@@ -172,6 +177,11 @@ foreach ($publications as $pub) {
         $researcher_grants[$grant_key]['roles_count']['CoAuthor']++;
     }
 }
+
+foreach ($researcher_grants as $k => &$rg) {
+    $rg['funding_sponsor'] = !empty($rg['sponsors']) ? implode(', ', $rg['sponsors']) : 'ไม่ระบุชื่อแหล่งทุน';
+}
+unset($rg);
 
 uasort($researcher_grants, function ($a, $b) {
     $cA = count($a['papers']);

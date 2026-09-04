@@ -113,7 +113,7 @@ if ($sort === 'cits_desc') {
 $grants_sql = "
     SELECT 
         p.funding_no,
-        p.funding_sponsor,
+        GROUP_CONCAT(DISTINCT NULLIF(TRIM(p.funding_sponsor), '') SEPARATOR ', ') AS funding_sponsor,
         COUNT(p.id) AS pub_count,
         SUM(p.citation_count) AS total_citations,
         ROUND(AVG(CASE WHEN p.rcr IS NOT NULL THEN p.rcr ELSE NULL END), 2) AS avg_rcr,
@@ -124,7 +124,7 @@ $grants_sql = "
         GROUP_CONCAT(p.id) AS pub_ids_str
     FROM publications p
     WHERE $where_sql
-    GROUP BY p.funding_no, p.funding_sponsor
+    GROUP BY p.funding_no
     ORDER BY $order_by
 ";
 
