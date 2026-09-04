@@ -30,7 +30,7 @@ $departments_list = $departments_stmt->fetchAll(PDO::FETCH_COLUMN);
 
 // Pre-selected researcher ID if coming from profile.php (?res_id=...)
 $pre_res_id = isset($_GET['res_id']) ? (int)$_GET['res_id'] : 0;
-$initial_type = $pre_res_id > 0 ? 'researcher' : 'recent';
+$initial_type = $pre_res_id > 0 ? 'researcher' : 'stats_recent';
 
 // Calculate base system URL for embed codes
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
@@ -145,10 +145,11 @@ $system_url = $protocol . $host . $base_dir;
         <div class="form-group-custom">
             <label class="form-label-custom">1. เลือกประเภทข้อมูลที่ต้องการแสดง (Widget Type)</label>
             <select id="config-type" class="form-select-custom" onchange="onWidgetTypeChange()">
-                <option value="recent" <?php echo $initial_type === 'recent' ? 'selected' : ''; ?>>ผลงานตีพิมพ์วิจัยล่าสุด (Recent Publications)</option>
-                <option value="stats">สรุปภาพรวมสถิติวิจัยระดับคณะ (Research Overview Stats)</option>
+                <option value="stats_recent" <?php echo $initial_type === 'stats_recent' ? 'selected' : ''; ?>>สรุปภาพรวมสถิติ + ผลงานตีพิมพ์ล่าสุด (แนะนำสำหรับหน้าแรกเว็บ)</option>
+                <option value="recent" <?php echo $initial_type === 'recent' ? 'selected' : ''; ?>>ผลงานตีพิมพ์วิจัยล่าสุดอย่างเดียว (Recent Publications)</option>
+                <option value="stats" <?php echo $initial_type === 'stats' ? 'selected' : ''; ?>>สรุปภาพรวมสถิติวิจัยระดับคณะอย่างเดียว (Overview Stats)</option>
                 <option value="researcher" <?php echo $initial_type === 'researcher' ? 'selected' : ''; ?>>โปรไฟล์และผลงานนักวิจัยรายบุคคล (Researcher Profile)</option>
-                <option value="department">ผลงานวิจัยเฉพาะภาควิชา (Department Publications)</option>
+                <option value="department" <?php echo $initial_type === 'department' ? 'selected' : ''; ?>>ผลงานวิจัยเฉพาะภาควิชา (Department Publications)</option>
             </select>
         </div>
 

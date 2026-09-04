@@ -12,8 +12,8 @@ require_once __DIR__ . '/includes/functions.php';
 
 // Sanitize query parameters
 $type = trim($_GET['type'] ?? 'recent');
-if (!in_array($type, ['recent', 'stats', 'researcher', 'department'])) {
-    $type = 'recent';
+if (!in_array($type, ['stats_recent', 'recent', 'stats', 'researcher', 'department'])) {
+    $type = 'stats_recent';
 }
 
 $theme = trim($_GET['theme'] ?? 'light');
@@ -30,7 +30,7 @@ $show_badge = isset($_GET['badge']) ? (bool)(int)$_GET['badge'] : true;
 $data = [];
 $extra_info = [];
 
-if ($type === 'stats') {
+if ($type === 'stats' || $type === 'stats_recent') {
     $total_pubs = get_total_publications($pdo);
     $total_cits = get_total_citations($pdo);
     $total_researchers = get_total_researchers($pdo);
@@ -51,6 +51,21 @@ if ($type === 'stats') {
         'q_pct' => $q_pct,
         'inter_count' => $inter_count,
     ];
+
+    if ($type === 'stats_recent') {
+        $q_sql = "SELECT p.* FROM publications p WHERE 1=1";
+        if ($quartile_filter === 'Q1') {
+            $q_sql .= " AND p.quartile = 'Q1'";
+        } elseif ($quartile_filter === 'Q1_Q2') {
+            $q_sql .= " AND p.quartile IN ('Q1', 'Q2')";
+        }
+        $q_sql .= " ORDER BY p.publish_year DESC, p.publish_date DESC, p.id DESC LIMIT :limit";
+
+        $stmt = $pdo->prepare($q_sql);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 } elseif ($type === 'researcher') {
     $res_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     $res_stmt = $pdo->prepare("SELECT * FROM researchers WHERE id = :id");
@@ -412,7 +427,10 @@ $system_url = $protocol . $host . $base_dir;
     <?php if ($show_header): ?>
         <div class="widget-header">
             <div class="widget-title">
-                <?php if ($type === 'stats'): ?>
+                <?php if ($type === 'stats_recent'): ?>
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>ภาพรวมงานวิจัย &amp; ผลงานตีพิมพ์ล่าสุด</span>
+                <?php elseif ($type === 'stats'): ?>
                     <i class="fa-solid fa-chart-line"></i>
                     <span>ภาพรวมงานวิจัย คณะวิทยาศาสตร์การแพทย์</span>
                 <?php elseif ($type === 'researcher' && !empty($extra_info['researcher'])): ?>
@@ -435,9 +453,9 @@ $system_url = $protocol . $host . $base_dir;
         </div>
     <?php endif; ?>
 
-    <!-- Type 1: Stats Overview -->
-    <?php if ($type === 'stats'): ?>
-        <div class="stats-grid">
+    <!-- Type 1: Stats Overview OR Stats + Recent Combined -->
+    <?php if ($type === 'stats' || $type === 'stats_recent'): ?>
+        <div class="stats-grid" style="<?php echo $type === 'stats_recent' ? 'margin-bottom: 16px;' : ''; ?>">
             <div class="stat-card">
                 <div class="stat-num" style="color: #10b981;"><?php echo number_format($extra_info['total_pubs']); ?></div>
                 <div class="stat-label text-muted">ผลงานตีพิมพ์รวม</div>
@@ -455,6 +473,54 @@ $system_url = $protocol . $host . $base_dir;
                 <div class="stat-label text-muted">ร่วมวิจัยนานาชาติ</div>
             </div>
         </div>
+
+        <?php if ($type === 'stats_recent'): ?>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 600; font-size: 0.88rem;">
+                <span class="text-main" style="display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-clock-rotate-left" style="color: var(--color-primary);"></i> ผลงานตีพิมพ์ล่าสุด
+                </span>
+                <span class="text-muted" style="font-size: 0.75rem; font-weight: 400;"><?php echo count($data); ?> รายการล่าสุด</span>
+            </div>
+            <div class="widget-list">
+                <?php if (empty($data)): ?>
+                    <div style="text-align: center; padding: 20px;" class="text-muted">ไม่พบข้อมูลผลงานตีพิมพ์ตามเงื่อนไข</div>
+                <?php else: ?>
+                    <?php foreach ($data as $item): ?>
+                        <div class="widget-item">
+                            <div class="item-title">
+                                <?php if (!empty($item['url'])): ?>
+                                    <a href="<?php echo htmlspecialchars($item['url']); ?>" target="_blank">
+                                        <?php echo htmlspecialchars($item['title']); ?>
+                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.65rem; opacity: 0.6; margin-left: 2px;"></i>
+                                    </a>
+                                <?php elseif (!empty($item['doi'])): ?>
+                                    <a href="https://doi.org/<?php echo htmlspecialchars($item['doi']); ?>" target="_blank">
+                                        <?php echo htmlspecialchars($item['title']); ?>
+                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.65rem; opacity: 0.6; margin-left: 2px;"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <?php echo htmlspecialchars($item['title']); ?>
+                                <?php endif; ?>
+                            </div>
+                            <div class="item-meta">
+                                <div class="meta-left text-muted">
+                                    <span><i class="fa-solid fa-book" style="font-size: 0.68rem;"></i> <?php echo htmlspecialchars($item['journal_name'] ?: 'N/A'); ?> (<?php echo $item['publish_year']; ?>)</span>
+                                    <?php if ((int)$item['citation_count'] > 0): ?>
+                                        <span>&bull;</span>
+                                        <span style="color: #f59e0b;"><i class="fa-solid fa-quote-right" style="font-size: 0.65rem;"></i> <?php echo (int)$item['citation_count']; ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (!empty($item['quartile'])): ?>
+                                    <span class="badge-q badge-<?php echo strtolower($item['quartile']); ?>">
+                                        <?php echo htmlspecialchars($item['quartile']); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
     <!-- Type 2: Researcher Profile + Recent Papers -->
     <?php elseif ($type === 'researcher'): ?>
